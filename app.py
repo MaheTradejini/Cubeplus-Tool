@@ -52,6 +52,7 @@ def create_app():
         return redirect(url_for("/"))
 
 
+
     return render_template("login.html", form=form)
 
 
