@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block body %}
+<h2>Dashboard</h2>
+<p><b>Total Amount:</b> ₹{{ '%.2f'|format(balance) }}</p>
+<table border="1" cellspacing="0" cellpadding="6">
+  <thead><tr><th>Symbol</th><th>LTP</th><th>Buy</th><th>Sell</th></tr></thead>
+  <tbody id="watchlist">
+    {% for i in instruments %}
+    <tr data-symbol="{{ i.symbol }}">
+      <td>{{ i.symbol }}</td>
+      <td class="ltp">-</td>
+      <td><button class="buy">Buy 1</button></td>
+      <td><button class="sell">Sell 1</button></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
