@@ -42,6 +42,7 @@ def create_app():
     return render_template("login.html", form=form)
 
 
+
   @app.route("/register", methods = ['GET', 'POST'])
   def login():
     form = RegisterForm()
