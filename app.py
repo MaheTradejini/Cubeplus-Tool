@@ -1,4 +1,4 @@
-from flask import Flask, flash, redirect, render_template, url_for
+from flask import Flask, flash, redirect, render_template, url_for, session
 from forms import RegisterForm, LoginForm
 from models import db, User
 from flask_bcrypt import Bcrypt
@@ -33,10 +33,16 @@ def create_app():
   @app.route("/login")
   def login():
     form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and bcrypt.check_password_hash(user.password, form.password.data):
+            session['user_id'] = user.id
+            session['username'] = user.name
+            flash('You have been logged in!', 'success')
     return render_template("login.html", form=form)
 
 
-  @app.route("/register")
+  @app.route("/register", methods = ['GET', 'POST'])
   def login():
     form = RegisterForm()
     if form.validate_on_submit():
@@ -49,7 +55,7 @@ def create_app():
         db.session.add(user)
         db.session.commit()
         flash('Your Account has been created!!!', 'success')
-        return redirect(url_for("/"))
+        return redirect(url_for("login"))
 
 
 
