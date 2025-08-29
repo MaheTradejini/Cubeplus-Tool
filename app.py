@@ -1,3 +1,4 @@
+from functools import wraps
 from flask import Flask, flash, redirect, render_template, url_for, session
 from forms import RegisterForm, LoginForm
 from models import db, User
@@ -25,13 +26,24 @@ def create_app():
   with app.app_context():
     db.create_all()
 
+
+  def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
   @app.route("/")
-  def index():
+  def home():
     return render_template("home.html")
 
 
   @app.route("/login")
   def login():
+    if 'user_id' in session:
+        return redirect(url_for("dashboard"))
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
@@ -39,6 +51,7 @@ def create_app():
             session['user_id'] = user.id
             session['username'] = user.name
             flash('You have been logged in!', 'success')
+            return redirect(url_for('dashbaord'))
     return render_template("login.html", form=form)
 
 
@@ -46,7 +59,9 @@ def create_app():
 
 
   @app.route("/register", methods = ['GET', 'POST'])
-  def login():
+  def register():
+    if 'user_id' in session:
+        return redirect(url_for("dashboard"))
     form = RegisterForm()
     if form.validate_on_submit():
         hased_password = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
@@ -60,9 +75,19 @@ def create_app():
         flash('Your Account has been created!!!', 'success')
         return redirect(url_for("login"))
 
-
-
     return render_template("login.html", form=form)
+
+  @app.route("/dashboard")
+  @login_required
+  def dashboard():
+    return render_template("dashboard.html")
+
+  @app.route("/logout")
+  def logout():
+    session.pop('user_id')
+    session.pop('username')
+    flash('You have been logged out !', 'success')
+    return redirect(url_for('home'))
 
 
 

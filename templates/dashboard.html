@@ -1,8 +1,17 @@
-{% extends "base.html" %}{% block body %}
-<h2>Dashboard</h2>
-<p><b>Total Amount:</b> ₹{{ '%.2f'|format(balance) }}</p>
+{% extends 'layout.html' %} {% block content %}
+
+<h2>Dashboard : {{ session['username'] }} - ( {{ session['user_id'] }} )</h2>
+<a href="/logout">Logout</a>
+<!-- <p><b>Total Amount:</b> ₹{{ '%.2f'|format(balance) }}</p>
 <table border="1" cellspacing="0" cellpadding="6">
-  <thead><tr><th>Symbol</th><th>LTP</th><th>Buy</th><th>Sell</th></tr></thead>
+  <thead>
+    <tr>
+      <th>Symbol</th>
+      <th>LTP</th>
+      <th>Buy</th>
+      <th>Sell</th>
+    </tr>
+  </thead>
   <tbody id="watchlist">
     {% for i in instruments %}
     <tr data-symbol="{{ i.symbol }}">
@@ -13,5 +22,6 @@
     </tr>
     {% endfor %}
   </tbody>
-</table>
+</table> -->
+
 {% endblock %}

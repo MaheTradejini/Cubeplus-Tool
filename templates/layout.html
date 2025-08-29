@@ -8,8 +8,12 @@
   <body>
     <nav>
       <a href="/"> Home Page </a> |
+      {% if user_id in session %}
+      <a href="/dashboard"> Dashboard </a> |
+      {% else %}
       <a href="/login"> Login </a> |
       <a href="/register"> Register </a>
+      {% endif %}
     </nav>
 
     <div>
