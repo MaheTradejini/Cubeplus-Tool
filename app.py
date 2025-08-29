@@ -17,7 +17,7 @@ from flask_bcrypt import Bcrypt
 def create_app():
   app = Flask(__name__)
   app.config['SECRET_KEY'] = "APPSECRECTKEY"
-  app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:admin123@localhost:5432/flask_db'
+  app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:admin123@localhost:5432/stocks'
   bcrypt = Bcrypt()
 
   db.init_app(app)
@@ -40,7 +40,7 @@ def create_app():
     return render_template("home.html")
 
 
-  @app.route("/login")
+  @app.route("/login", methods=['GET', 'POST'])
   def login():
     if 'user_id' in session:
         return redirect(url_for("dashboard"))
@@ -49,9 +49,16 @@ def create_app():
         user = User.query.filter_by(email=form.email.data).first()
         if user and bcrypt.check_password_hash(user.password, form.password.data):
             session['user_id'] = user.id
-            session['username'] = user.name
+            session['username'] = user.username
             flash('You have been logged in!', 'success')
-            return redirect(url_for('dashbaord'))
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Login failed. Check email and password.', 'danger')
+    else:
+        if form.errors:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(f'{field}: {error}', 'danger')
     return render_template("login.html", form=form)
 
 
@@ -75,7 +82,7 @@ def create_app():
         flash('Your Account has been created!!!', 'success')
         return redirect(url_for("login"))
 
-    return render_template("login.html", form=form)
+    return render_template("register.html", form=form)
 
   @app.route("/dashboard")
   @login_required
