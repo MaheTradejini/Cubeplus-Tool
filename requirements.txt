@@ -1,9 +1,9 @@
 flask
 python-dotenv
 psycopg2
-Flask 
 Flask-SQLAlchemy
-pymysql
 flask_wtf
 wtforms
 flask_bcrypt
+flask-socketio
+requests

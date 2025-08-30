@@ -1,0 +1,93 @@
+{% extends 'layout.html' %} 
+
+{% block content %}
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+  <div>
+    <h2 style="font-size: 2.5em; margin-bottom: 5px;">📈 Portfolio</h2>
+    <p style="color: #666; font-size: 1.1em;">Your holdings and transaction history</p>
+  </div>
+  <a href="/dashboard" class="btn">🔙 Back to Dashboard</a>
+</div>
+
+<!-- Current Holdings -->
+<h3 style="margin-bottom: 20px;">💼 Current Holdings</h3>
+{% if holdings %}
+<div style="overflow-x: auto; margin-bottom: 40px;">
+  <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+    <thead style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white;">
+      <tr>
+        <th style="padding: 15px; text-align: left;">Symbol</th>
+        <th style="padding: 15px; text-align: right;">Quantity</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for symbol, quantity in holdings.items() %}
+      <tr style="border-bottom: 1px solid #eee;">
+        <td style="padding: 15px; font-weight: bold; color: #333;">{{ symbol }}</td>
+        <td style="padding: 15px; text-align: right; font-weight: bold; color: #28a745;">{{ quantity }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div style="text-align: center; padding: 40px 20px; background: #f8f9fa; border-radius: 15px; margin-bottom: 40px;">
+  <div style="font-size: 3em; margin-bottom: 15px;">📊</div>
+  <h4>No Holdings</h4>
+  <p style="color: #666;">Start trading to build your portfolio</p>
+</div>
+{% endif %}
+
+<!-- Transaction History -->
+<h3 style="margin-bottom: 20px;">📋 Transaction History</h3>
+{% if transactions %}
+<div style="overflow-x: auto;">
+  <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+    <thead style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+      <tr>
+        <th style="padding: 15px; text-align: left;">Date & Time</th>
+        <th style="padding: 15px; text-align: left;">Symbol</th>
+        <th style="padding: 15px; text-align: center;">Type</th>
+        <th style="padding: 15px; text-align: right;">Quantity</th>
+        <th style="padding: 15px; text-align: right;">Price (₹)</th>
+        <th style="padding: 15px; text-align: right;">Total (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for transaction in transactions %}
+      <tr style="border-bottom: 1px solid #eee;">
+        <td style="padding: 15px; color: #666;">{{ transaction.timestamp.strftime('%d %b %Y, %I:%M %p') }}</td>
+        <td style="padding: 15px; font-weight: bold; color: #333;">{{ transaction.symbol }}</td>
+        <td style="padding: 15px; text-align: center;">
+          {% if transaction.type == 'BUY' %}
+          <span style="background: #28a745; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px;">
+            🛒 BUY
+          </span>
+          {% else %}
+          <span style="background: #dc3545; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px;">
+            💰 SELL
+          </span>
+          {% endif %}
+        </td>
+        <td style="padding: 15px; text-align: right; font-weight: bold;">{{ transaction.quantity }}</td>
+        <td style="padding: 15px; text-align: right; color: #333;">₹{{ '%.2f'|format(transaction.price) }}</td>
+        <td style="padding: 15px; text-align: right; font-weight: bold; 
+           {% if transaction.type == 'BUY' %}color: #dc3545;{% else %}color: #28a745;{% endif %}">
+          {% if transaction.type == 'BUY' %}-{% else %}+{% endif %}₹{{ '%.2f'|format(transaction.price * transaction.quantity) }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div style="text-align: center; padding: 60px 20px; background: #f8f9fa; border-radius: 15px;">
+  <div style="font-size: 4em; margin-bottom: 20px;">📊</div>
+  <h3 style="margin-bottom: 15px;">No Transactions Yet</h3>
+  <p style="color: #666; margin-bottom: 30px;">Start trading to see your transaction history here.</p>
+  <a href="/dashboard" class="btn">🚀 Start Trading</a>
+</div>
+{% endif %}
+
+{% endblock %}
