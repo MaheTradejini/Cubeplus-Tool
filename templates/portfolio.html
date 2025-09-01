@@ -7,8 +7,32 @@
     <h2 style="font-size: 2.5em; margin-bottom: 5px;">📈 Portfolio</h2>
     <p style="color: #666; font-size: 1.1em;">Your holdings and transaction history</p>
   </div>
-  <a href="/dashboard" class="btn">🔙 Back to Dashboard</a>
+  <div style="display: flex; gap: 15px; align-items: center;">
+    <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold;">
+      💰 Available Balance: ₹{{ '%.2f'|format(current_user.balance) }}
+    </div>
+    <a href="/dashboard" class="btn">🔙 Back to Dashboard</a>
+  </div>
 </div>
+
+<!-- Portfolio Summary -->
+{% if summary %}
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 15px; text-align: center;">
+    <h4 style="margin: 0 0 10px 0;">💰 Total Invested</h4>
+    <p style="font-size: 1.5em; font-weight: bold; margin: 0;">₹{{ '%.2f'|format(summary.total_invested) }}</p>
+  </div>
+  <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 20px; border-radius: 15px; text-align: center;">
+    <h4 style="margin: 0 0 10px 0;">📈 Current Value</h4>
+    <p style="font-size: 1.5em; font-weight: bold; margin: 0;">₹{{ '%.2f'|format(summary.current_value) }}</p>
+  </div>
+  <div style="background: linear-gradient(135deg, {{ '#28a745' if summary.total_pnl >= 0 else '#dc3545' }} 0%, {{ '#20c997' if summary.total_pnl >= 0 else '#c82333' }} 100%); color: white; padding: 20px; border-radius: 15px; text-align: center;">
+    <h4 style="margin: 0 0 10px 0;">{{ '📊' if summary.total_pnl >= 0 else '📉' }} Total P&L</h4>
+    <p style="font-size: 1.5em; font-weight: bold; margin: 0;">{{ '+' if summary.total_pnl >= 0 else '' }}₹{{ '%.2f'|format(summary.total_pnl) }}</p>
+    <p style="font-size: 0.9em; margin: 5px 0 0 0;">{{ '+' if summary.total_pnl_percent >= 0 else '' }}{{ '%.2f'|format(summary.total_pnl_percent) }}%</p>
+  </div>
+</div>
+{% endif %}
 
 <!-- Current Holdings -->
 <h3 style="margin-bottom: 20px;">💼 Current Holdings</h3>
@@ -19,13 +43,26 @@
       <tr>
         <th style="padding: 15px; text-align: left;">Symbol</th>
         <th style="padding: 15px; text-align: right;">Quantity</th>
+        <th style="padding: 15px; text-align: right;">Avg Price</th>
+        <th style="padding: 15px; text-align: right;">Current Price</th>
+        <th style="padding: 15px; text-align: right;">Invested</th>
+        <th style="padding: 15px; text-align: right;">Current Value</th>
+        <th style="padding: 15px; text-align: right;">P&L</th>
       </tr>
     </thead>
     <tbody>
-      {% for symbol, quantity in holdings.items() %}
-      <tr style="border-bottom: 1px solid #eee;">
+      {% for symbol, data in holdings.items() %}
+      <tr style="border-bottom: 1px solid #eee;" data-symbol="{{ symbol }}">
         <td style="padding: 15px; font-weight: bold; color: #333;">{{ symbol }}</td>
-        <td style="padding: 15px; text-align: right; font-weight: bold; color: #28a745;">{{ quantity }}</td>
+        <td style="padding: 15px; text-align: right; font-weight: bold;" class="quantity">{{ data['quantity'] }}</td>
+        <td style="padding: 15px; text-align: right;" class="avg-price">₹{{ '%.2f'|format(data['avg_price']) }}</td>
+        <td style="padding: 15px; text-align: right; font-weight: bold; color: #28a745;" class="live-price" data-symbol="{{ symbol }}">₹{{ '%.2f'|format(data['current_price']) }}</td>
+        <td style="padding: 15px; text-align: right;">₹{{ '%.2f'|format(data['invested']) }}</td>
+        <td style="padding: 15px; text-align: right; font-weight: bold;" class="current-value">₹{{ '%.2f'|format(data['current_value']) }}</td>
+        <td style="padding: 15px; text-align: right; font-weight: bold; color: {{ '#28a745' if data['pnl'] >= 0 else '#dc3545' }};" class="pnl">
+          {{ '+' if data['pnl'] >= 0 else '' }}₹{{ '%.2f'|format(data['pnl']) }}<br>
+          <small>({{ '+' if data['pnl_percent'] >= 0 else '' }}{{ '%.2f'|format(data['pnl_percent']) }}%)</small>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -57,7 +94,7 @@
     <tbody>
       {% for transaction in transactions %}
       <tr style="border-bottom: 1px solid #eee;">
-        <td style="padding: 15px; color: #666;">{{ transaction.timestamp.strftime('%d %b %Y, %I:%M %p') }}</td>
+        <td style="padding: 15px; color: #666;">{{ (transaction.timestamp + timedelta(hours=5, minutes=30)).strftime('%d %b %Y, %I:%M %p') }}</td>
         <td style="padding: 15px; font-weight: bold; color: #333;">{{ transaction.symbol }}</td>
         <td style="padding: 15px; text-align: center;">
           {% if transaction.type == 'BUY' %}
@@ -89,5 +126,50 @@
   <a href="/dashboard" class="btn">🚀 Start Trading</a>
 </div>
 {% endif %}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+    const socket = io();
+    
+    socket.on('price_update', function(data) {
+        const symbol = data.symbol;
+        const price = data.price;
+        
+        // Update live price in portfolio
+        const priceCell = document.querySelector(`td.live-price[data-symbol="${symbol}"]`);
+        if (priceCell) {
+            priceCell.textContent = `₹${price.toFixed(2)}`;
+            
+            // Flash effect
+            priceCell.style.background = '#fff3cd';
+            setTimeout(() => {
+                priceCell.style.background = 'transparent';
+            }, 500);
+            
+            // Recalculate P&L for this row
+            updateRowPnL(symbol, price);
+        }
+    });
+    
+    function updateRowPnL(symbol, currentPrice) {
+        const row = document.querySelector(`tr[data-symbol="${symbol}"]`);
+        if (row) {
+            const quantity = parseInt(row.querySelector('.quantity').textContent);
+            const avgPrice = parseFloat(row.querySelector('.avg-price').textContent.replace('₹', ''));
+            const invested = quantity * avgPrice;
+            const currentValue = quantity * currentPrice;
+            const pnl = currentValue - invested;
+            const pnlPercent = (pnl / invested * 100);
+            
+            // Update current value
+            row.querySelector('.current-value').textContent = `₹${currentValue.toFixed(2)}`;
+            
+            // Update P&L
+            const pnlCell = row.querySelector('.pnl');
+            pnlCell.innerHTML = `${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}<br><small>(${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)</small>`;
+            pnlCell.style.color = pnl >= 0 ? '#28a745' : '#dc3545';
+        }
+    }
+</script>
 
 {% endblock %}

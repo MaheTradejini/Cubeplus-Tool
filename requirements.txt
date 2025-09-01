@@ -7,3 +7,4 @@ wtforms
 flask_bcrypt
 flask-socketio
 requests
+websocket-client

@@ -1,12 +1,14 @@
 from functools import wraps
 from flask import Flask, flash, redirect, render_template, url_for, session, request, jsonify
 from flask_socketio import SocketIO
-from forms import RegisterForm, LoginForm
-from models import db, User, Transaction
+from forms import LoginForm
+from admin_forms import CreateUserForm, EditUserForm, GlobalTOTPForm
+from models import db, User, Transaction, UserCredential
 from flask_bcrypt import Bcrypt
 from tradejini_client import TradejiniClient
-from real_price_stream import RealPriceStreamer
+from live_price_stream import LivePriceStreamer
 from config import TRADEJINI_CONFIG
+from sqlalchemy import func
 
 
 def create_app():
@@ -20,19 +22,27 @@ def create_app():
   db.init_app(app)
   bcrypt.init_app(app)
   
-  # Initialize real price streamer
-  price_streamer = RealPriceStreamer(socketio)
+  # Initialize live price streamer
+  price_streamer = LivePriceStreamer(socketio)
   
-  # Start real stream with your credentials
-  price_streamer.start_real_stream(
-      TRADEJINI_CONFIG['apikey'],
-      TRADEJINI_CONFIG['password'],
-      TRADEJINI_CONFIG['two_fa'],
-      TRADEJINI_CONFIG['two_fa_type']
-  )
+  # Start live stream
+  if not price_streamer.start_live_stream():
+      print("Failed to start live stream - check SDK installation")
 
   with app.app_context():
     db.create_all()
+    # Create admin user if not exists
+    admin = User.query.filter_by(username='admin').first()
+    if not admin:
+        admin = User(
+            username='admin',
+            email='admin@cubeplus.com',
+            is_admin=True,
+            balance=0
+        )
+        admin.set_password('admin123')
+        db.session.add(admin)
+        db.session.commit()
 
 
   def login_required(f):
@@ -43,6 +53,18 @@ def create_app():
         return f(*args, **kwargs)
     return decorated_function
 
+  def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'admin_id' not in session:
+            return redirect(url_for('admin_login'))
+        user = User.query.get(session['admin_id'])
+        if not user or not user.is_admin:
+            flash('Admin access required', 'danger')
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
   @app.route("/")
   def home():
     return render_template("home.html")
@@ -50,57 +72,36 @@ def create_app():
 
   @app.route("/login", methods=['GET', 'POST'])
   def login():
-    if 'user_id' in session:
-        return redirect(url_for("dashboard"))
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
-        if user and bcrypt.check_password_hash(user.password, form.password.data):
+        if user and user.is_active and user.check_password(form.password.data):
+            if user.is_admin:
+                flash('Admin users must login through /admin', 'warning')
+                return render_template("login.html", form=form)
             session['user_id'] = user.id
             session['username'] = user.username
             flash('You have been logged in!', 'success')
             return redirect(url_for('dashboard'))
         else:
-            flash('Login failed. Check email and password.', 'danger')
-    else:
-        if form.errors:
-            for field, errors in form.errors.items():
-                for error in errors:
-                    flash(f'{field}: {error}', 'danger')
+            flash('Login failed. Check credentials or account status.', 'danger')
     return render_template("login.html", form=form)
 
 
-  @app.route("/register", methods = ['GET', 'POST'])
-  def register():
-    if 'user_id' in session:
-        return redirect(url_for("dashboard"))
-    form = RegisterForm()
-    if form.validate_on_submit():
-        hased_password = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
-        user = User(
-            username=form.username.data,
-            email=form.email.data,
-            password=hased_password,
-        )
-        db.session.add(user)
-        db.session.commit()
-        flash('Your Account has been created!!!', 'success')
-        return redirect(url_for("login"))
 
-    return render_template("register.html", form=form)
 
   @app.route("/dashboard")
   @login_required
   def dashboard():
     user = User.query.get(session['user_id'])
-    if not user:
+    if not user or not user.is_active:
         session.clear()
-        flash('User not found. Please login again.', 'danger')
+        flash('Account not found or inactive.', 'danger')
         return redirect(url_for('login'))
     
-    if user.balance is None:
-        user.balance = 100000.0
-        db.session.commit()
+    if user.is_admin:
+        flash('Admin users cannot access client dashboard', 'danger')
+        return redirect(url_for('admin_login'))
     
     # Get stock data from TradJini API
     client = TradejiniClient()
@@ -134,9 +135,9 @@ def create_app():
         
         db.session.add(transaction)
         db.session.commit()
-        flash(f'Bought {quantity} shares of {symbol} at ₹{price}', 'success')
+        pass
     else:
-        flash('Insufficient balance', 'danger')
+        pass
     
     return redirect(url_for('dashboard'))
 
@@ -173,9 +174,9 @@ def create_app():
         
         db.session.add(transaction)
         db.session.commit()
-        flash(f'Sold {quantity} shares of {symbol} at ₹{price}', 'success')
+        pass
     else:
-        flash(f'Insufficient shares. Available: {available}', 'danger')
+        pass
     
     return redirect(url_for('dashboard'))
 
@@ -185,29 +186,200 @@ def create_app():
     user_id = session['user_id']
     transactions = Transaction.query.filter_by(user_id=user_id).order_by(Transaction.timestamp.desc()).all()
     
-    # Calculate holdings
+    # Calculate holdings with P&L
     holdings = {}
     for t in Transaction.query.filter_by(user_id=user_id).all():
         if t.symbol not in holdings:
-            holdings[t.symbol] = {'buy': 0, 'sell': 0}
+            holdings[t.symbol] = {'buy_qty': 0, 'sell_qty': 0, 'buy_value': 0, 'sell_value': 0}
         if t.type == 'BUY':
-            holdings[t.symbol]['buy'] += t.quantity
+            holdings[t.symbol]['buy_qty'] += t.quantity
+            holdings[t.symbol]['buy_value'] += t.quantity * t.price
         else:
-            holdings[t.symbol]['sell'] += t.quantity
+            holdings[t.symbol]['sell_qty'] += t.quantity
+            holdings[t.symbol]['sell_value'] += t.quantity * t.price
     
     current_holdings = {}
-    for symbol, data in holdings.items():
-        net_qty = data['buy'] - data['sell']
-        if net_qty > 0:
-            current_holdings[symbol] = net_qty
+    total_invested = 0
+    total_current_value = 0
     
-    return render_template("portfolio.html", transactions=transactions, holdings=current_holdings)
+    for symbol, data in holdings.items():
+        net_qty = data['buy_qty'] - data['sell_qty']
+        if net_qty > 0:
+            avg_buy_price = data['buy_value'] / data['buy_qty'] if data['buy_qty'] > 0 else 0
+            invested_amount = net_qty * avg_buy_price
+            
+            # Get current live price
+            current_price = price_streamer.get_current_price(symbol)
+            if current_price == 0.0:
+                current_price = avg_buy_price
+            current_value = net_qty * current_price
+            pnl = current_value - invested_amount
+            pnl_percent = (pnl / invested_amount * 100) if invested_amount > 0 else 0
+            
+            current_holdings[symbol] = {
+                'quantity': net_qty,
+                'avg_price': avg_buy_price,
+                'current_price': current_price,
+                'invested': invested_amount,
+                'current_value': current_value,
+                'pnl': pnl,
+                'pnl_percent': pnl_percent
+            }
+            
+            total_invested += invested_amount
+            total_current_value += current_value
+    
+    total_pnl = total_current_value - total_invested
+    total_pnl_percent = (total_pnl / total_invested * 100) if total_invested > 0 else 0
+    
+    portfolio_summary = {
+        'total_invested': total_invested,
+        'current_value': total_current_value,
+        'total_pnl': total_pnl,
+        'total_pnl_percent': total_pnl_percent
+    }
+    
+    from datetime import timedelta
+    return render_template("portfolio.html", transactions=transactions, holdings=current_holdings, summary=portfolio_summary, current_user=User.query.get(user_id), timedelta=timedelta)
+
+  # Admin Login Route
+  @app.route("/admin", methods=['GET', 'POST'])
+  def admin_login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and user.is_active and user.check_password(form.password.data):
+            if not user.is_admin:
+                flash('Admin access required', 'danger')
+                return render_template("admin_login.html", form=form)
+            session['admin_id'] = user.id
+            session['admin_username'] = user.username
+            flash('Admin logged in successfully!', 'success')
+            return redirect(url_for('admin_dashboard'))
+        else:
+            flash('Invalid admin credentials', 'danger')
+    return render_template("admin_login.html", form=form)
+
+  # Admin Dashboard
+  @app.route("/admin/dashboard")
+  @admin_required
+  def admin_dashboard():
+    total_users = User.query.count()
+    active_users = User.query.filter_by(is_active=True).count()
+    total_transactions = Transaction.query.count()
+    total_volume = db.session.query(func.sum(Transaction.price * Transaction.quantity)).scalar() or 0
+    recent_users = User.query.order_by(User.created_at.desc()).limit(10).all()
+    
+    return render_template("admin_dashboard.html", 
+                         total_users=total_users,
+                         active_users=active_users, 
+                         total_transactions=total_transactions,
+                         total_volume=f"{total_volume:,.0f}",
+                         recent_users=recent_users)
+
+  @app.route("/admin/logout")
+  @admin_required
+  def admin_logout():
+    session.pop('admin_id', None)
+    session.pop('admin_username', None)
+    flash('Admin logged out successfully!', 'success')
+    return redirect(url_for('admin_login'))
+
+  @app.route("/admin/users")
+  @admin_required
+  def admin_users():
+    users = User.query.all()
+    return render_template("admin_users.html", users=users)
+
+  @app.route("/admin/create-user", methods=['GET', 'POST'])
+  @admin_required
+  def admin_create_user():
+    form = CreateUserForm()
+    if form.validate_on_submit():
+        if User.query.count() >= 30:
+            flash('Maximum 30 users allowed', 'danger')
+            return redirect(url_for('admin_users'))
+        
+        existing_user = User.query.filter(
+            (User.username == form.username.data) | 
+            (User.email == form.email.data)
+        ).first()
+        
+        if existing_user:
+            flash('Username or email already exists', 'danger')
+        else:
+            user = User(
+                username=form.username.data,
+                email=form.email.data,
+                balance=float(form.balance.data or 100000),
+                is_admin=form.is_admin.data
+            )
+            user.set_password(form.password.data)
+            db.session.add(user)
+            db.session.commit()
+            flash(f'User {user.username} created successfully', 'success')
+            return redirect(url_for('admin_users'))
+    
+    return render_template("admin_create_user.html", form=form)
+
+  @app.route("/admin/edit-user/<int:user_id>", methods=['GET', 'POST'])
+  @admin_required
+  def admin_edit_user(user_id):
+    user = User.query.get_or_404(user_id)
+    form = EditUserForm()
+    
+    if form.validate_on_submit():
+        user.username = form.username.data
+        user.email = form.email.data
+        user.balance = float(form.balance.data)
+        user.is_active = form.is_active.data
+        user.is_admin = form.is_admin.data
+        db.session.commit()
+        flash(f'User {user.username} updated successfully', 'success')
+        return redirect(url_for('admin_users'))
+    
+    return render_template("admin_edit_user.html", form=form, user=user)
+
+  @app.route("/admin/global-totp", methods=['GET', 'POST'])
+  @admin_required
+  def admin_global_totp():
+    form = GlobalTOTPForm()
+    
+    if form.validate_on_submit():
+        # Update .env file with new TOTP
+        import os
+        env_path = '.env'
+        with open(env_path, 'r') as f:
+            lines = f.readlines()
+        
+        with open(env_path, 'w') as f:
+            for line in lines:
+                if line.startswith('TRADEJINI_TWO_FA='):
+                    f.write(f'TRADEJINI_TWO_FA={form.totp_secret.data}\n')
+                else:
+                    f.write(line)
+        
+        flash('Global TOTP updated successfully! Restart app to apply changes.', 'success')
+        return redirect(url_for('admin_dashboard'))
+    
+    return render_template("admin_global_totp.html", form=form)
+
+  @app.route("/admin/toggle-user/<int:user_id>")
+  @admin_required
+  def admin_toggle_user(user_id):
+    user = User.query.get_or_404(user_id)
+    if not user.is_admin:
+        user.is_active = not user.is_active
+        db.session.commit()
+        status = 'activated' if user.is_active else 'deactivated'
+        flash(f'User {user.username} {status}', 'success')
+    return redirect(url_for('admin_users'))
 
   @app.route("/logout")
   def logout():
-    session.pop('user_id')
-    session.pop('username')
-    flash('You have been logged out !', 'success')
+    session.pop('user_id', None)
+    session.pop('username', None)
+    flash('You have been logged out!', 'success')
     return redirect(url_for('home'))
 
   return app, socketio

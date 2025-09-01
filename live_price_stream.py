@@ -1,87 +1,147 @@
+import sys
+import os
 import time
 import threading
-import json
-from flask_socketio import SocketIO, emit
-import requests
+
+# Add the streaming SDK path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'python-sdk', 'streaming'))
+
+try:
+    from nxtradstream import NxtradStream
+    SDK_AVAILABLE = True
+except ImportError:
+    SDK_AVAILABLE = False
+    print("TradJini SDK not available")
+
+from config import TRADEJINI_CONFIG, STOCK_TOKENS
+from token_cache import token_cache
 
 # Global price storage
 live_prices = {}
+price_update_count = 0
 
 class LivePriceStreamer:
     def __init__(self, socketio):
         self.socketio = socketio
+        self.nx_stream = None
         self.is_connected = False
+        self.access_token = None
         
-        # Top 50 NSE stock tokens (you'll need to get actual tokens from TradJini API)
-        self.stock_tokens = {
-            "22_NSE": "RELIANCE",
-            "3045_NSE": "SBIN", 
-            "1594_NSE": "INFY",
-            "11536_NSE": "TCS",
-            "1333_NSE": "HDFCBANK",
-            # Add more tokens for your 50 stocks
-        }
+        # Create token to symbol mapping
+        self.token_to_symbol = {}
+        for symbol, token in STOCK_TOKENS.items():
+            self.token_to_symbol[token] = symbol
         
-    def getAccessToken(self, host, apikey, password, twoFa, twoFaType):
-        url = f"https://{host}/v2/api-gw/oauth/individual-token-v2"
-        headers = {"Authorization": f"Bearer {apikey}"}
-        postParams = {'password': password, 'twoFa': twoFa, 'twoFaTyp': twoFaType}
-        
+    def get_access_token(self):
+        """Get access token using cached token system"""
         try:
-            response = requests.post(url, data=postParams, headers=headers)
-            if response.status_code == 200:
-                return response.json()['access_token']
+            self.access_token = token_cache.get_access_token()
+            return self.access_token is not None
+        except:
+            return False
+    
+    def connect_callback(self, nx_stream, event):
+        """Handle TradJini WebSocket connection events"""
+        if event['s'] == "connected":
+            self.is_connected = True
+            print("TradJini WebSocket connected")
+            
+            stock_token_list = list(STOCK_TOKENS.values())
+            try:
+                nx_stream.subscribeL1(stock_token_list)
+                nx_stream.subscribeL1SnapShot(stock_token_list)
+                print(f"Subscribed to {len(stock_token_list)} stocks")
+            except:
+                pass
+                
+        elif event['s'] == "closed":
+            self.is_connected = False
+            reason = event.get("reason", "Unknown")
+            
+            if reason != "Unauthorized Access":
+                time.sleep(30)
+                token_cache.invalidate_cache()
+                if self.get_access_token():
+                    auth_token = f"{TRADEJINI_CONFIG['apikey']}:{self.access_token}"
+                    nx_stream.reconnect(auth_token)
+            else:
+                token_cache.invalidate_cache()
+                
+        elif event['s'] == "error":
+            self.is_connected = False
+    
+    def stream_callback(self, nx_stream, data):
+        """Handle incoming live price data from TradJini"""
+        try:
+            if isinstance(data, dict) and data.get('msgType') == 'L1' and 'symbol' in data:
+                symbol_token = data['symbol']
+                symbol = self.token_to_symbol.get(symbol_token)
+                if symbol:
+                    price = data.get('ltp', 0.0)
+                    if price > 0:
+                        live_prices[symbol] = float(price)
+                        
+                        self.socketio.emit('price_update', {
+                            'symbol': symbol,
+                            'price': float(price)
+                        })
+                        
+                        global price_update_count
+                        price_update_count += 1
         except:
             pass
-        return None
     
-    def stream_callback(self, data):
-        """Handle incoming price data"""
+    def start_live_stream(self):
+        """Start TradJini SDK live price streaming"""
+        if not SDK_AVAILABLE:
+            return False
+        
+        if not self.get_access_token():
+            return False
+        
         try:
-            if 'tk' in data and 'lp' in data:  # token and last price
-                token = data['tk']
-                price = float(data['lp'])
-                
-                if token in self.stock_tokens:
-                    symbol = self.stock_tokens[token]
-                    live_prices[symbol] = price
-                    
-                    # Emit to all connected clients
-                    self.socketio.emit('price_update', {
-                        'symbol': symbol,
-                        'price': price
-                    })
-        except Exception as e:
-            print(f"Error processing price data: {e}")
-    
-    def start_mock_stream(self):
-        """Mock price streaming for demo (replace with real TradJini stream)"""
-        import random
-        
-        base_prices = {
-            "RELIANCE": 2500, "TCS": 3200, "HDFCBANK": 1600, "INFY": 1400, 
-            "HINDUNILVR": 2400, "ICICIBANK": 900, "KOTAKBANK": 1800, 
-            "BHARTIARTL": 800, "ITC": 450, "SBIN": 550
-        }
-        
-        def mock_price_generator():
-            while True:
-                for symbol, base_price in base_prices.items():
-                    # Generate price with ±2% fluctuation
-                    fluctuation = random.uniform(-0.02, 0.02)
-                    new_price = round(base_price * (1 + fluctuation), 2)
-                    live_prices[symbol] = new_price
-                    
-                    self.socketio.emit('price_update', {
-                        'symbol': symbol,
-                        'price': new_price
-                    })
-                
-                time.sleep(1)  # Update every second
-        
-        thread = threading.Thread(target=mock_price_generator, daemon=True)
-        thread.start()
+            auth_token = f"{TRADEJINI_CONFIG['apikey']}:{self.access_token}"
+            
+            self.nx_stream = NxtradStream(
+                'api.tradejini.com',
+                stream_cb=self.stream_callback,
+                connect_cb=self.connect_callback
+            )
+            
+            def connect_stream():
+                try:
+                    self.nx_stream.connect(auth_token)
+                except:
+                    token_cache.invalidate_cache()
+            
+            stream_thread = threading.Thread(target=connect_stream, daemon=True)
+            stream_thread.start()
+            
+            return True
+            
+        except:
+            return False
     
     def get_current_price(self, symbol):
-        """Get current price for a symbol"""
-        return live_prices.get(symbol, 0.0)
+        """Get current live price for a symbol"""
+        price = live_prices.get(symbol, 0.0)
+        return price
+    
+    def is_market_open(self):
+        """Check if market is open and receiving live data"""
+        return self.is_connected and len(live_prices) > 0
+    
+    def get_connection_status(self):
+        """Get detailed connection status"""
+        return {
+            'connected': self.is_connected,
+            'stocks_with_prices': len(live_prices),
+            'total_stocks': len(STOCK_TOKENS),
+            'sdk_available': SDK_AVAILABLE
+        }
+    
+    def stop_stream(self):
+        """Stop the live stream"""
+        if self.nx_stream:
+            self.nx_stream.disconnect()
+        self.is_connected = False

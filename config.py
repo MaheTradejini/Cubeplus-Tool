@@ -13,7 +13,7 @@ TRADEJINI_CONFIG = {
 }
 
 # Database and App Configuration
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:admin123@localhost:5432/stocks')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:admin123@localhost:5432/cubeplus_tool_db')
 SECRET_KEY = os.getenv('SECRET_KEY', 'APPSECRECTKEY')
 
 # Stock tokens - you need to get these from TradJini symbol master API

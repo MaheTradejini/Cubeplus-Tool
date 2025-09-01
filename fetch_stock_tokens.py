@@ -1,40 +1,15 @@
 import requests
 import json
 from config import TRADEJINI_CONFIG
-
-def get_access_token():
-    """Get access token from TradJini"""
-    try:
-        url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
-        headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}"}
-        data = {
-            'password': TRADEJINI_CONFIG['password'],
-            'twoFa': TRADEJINI_CONFIG['two_fa'],
-            'twoFaTyp': TRADEJINI_CONFIG['two_fa_type']
-        }
-        
-        response = requests.post(url, data=data, headers=headers)
-        if response.status_code == 200:
-            resp_data = response.json()
-            if 'access_token' in resp_data:
-                return resp_data['access_token']
-            else:
-                print(f"API Error: {resp_data}")
-        else:
-            print(f"API Error: Status {response.status_code}, Response: {response.text}")
-    except Exception as e:
-        print(f"Error getting access token: {e}")
-    return None
+from token_cache import token_cache
 
 def get_symbol_master():
     """Get symbol master data from TradJini"""
-    access_token = get_access_token()
+    access_token = token_cache.get_access_token()
     if not access_token:
-        print("Could not get access token")
         return None
     
     try:
-        # Get symbol master for NSE equity
         url = "https://api.tradejini.com/api/mkt-data/scrips/symbol-store/Securities"
         headers = {
             "Authorization": f"{TRADEJINI_CONFIG['apikey']}:{access_token}",
@@ -44,10 +19,8 @@ def get_symbol_master():
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             return response.json()
-        else:
-            print(f"Symbol API Error: Status {response.status_code}, Response: {response.text}")
-    except Exception as e:
-        print(f"Error getting symbol master: {e}")
+    except:
+        pass
     return None
 
 def extract_top_50_nse_stocks():
@@ -99,8 +72,6 @@ def extract_top_50_nse_stocks():
                     if symbol in top_50_symbols and exchange == 'NSE':
                         stock_tokens[symbol] = f"{token}_NSE"
         
-        print(f"Found {len(stock_tokens)} stock tokens from API")
-        
         # Fill missing stocks with mock tokens
         for symbol in top_50_symbols:
             if symbol not in stock_tokens:
@@ -108,13 +79,11 @@ def extract_top_50_nse_stocks():
         
         return stock_tokens
         
-    except Exception as e:
-        print(f"Error parsing symbol data: {e}")
+    except:
         return generate_mock_tokens(top_50_symbols)
 
 def generate_mock_tokens(symbols):
     """Generate mock tokens for testing"""
-    print("Generating mock tokens for testing...")
     return {symbol: f"MOCK_{symbol}_NSE" for symbol in symbols}
 
 def update_config_file(stock_tokens):
@@ -139,25 +108,15 @@ def update_config_file(stock_tokens):
         with open('config.py', 'w') as f:
             f.write(new_content)
         
-        print(f"Updated config.py with {len(stock_tokens)} stock tokens")
+        pass
         
-    except Exception as e:
-        print(f"Error updating config file: {e}")
+    except:
+        pass
 
 if __name__ == "__main__":
-    print("Fetching stock tokens from TradJini API...")
     stock_tokens = extract_top_50_nse_stocks()
-    
     if stock_tokens:
-        print(f"\nFound tokens for {len(stock_tokens)} stocks:")
-        for symbol, token in list(stock_tokens.items())[:10]:  # Show first 10
-            print(f"  {symbol}: {token}")
-        
-        if len(stock_tokens) > 10:
-            print(f"  ... and {len(stock_tokens) - 10} more")
-        
-        # Update config file
         update_config_file(stock_tokens)
-        print("\nStock tokens updated successfully!")
+        print(f"Updated {len(stock_tokens)} stock tokens")
     else:
         print("Failed to fetch stock tokens")
