@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Users - Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 15px; padding: 20px; margin-bottom: 30px; }
+        .header h1 { color: white; text-align: center; }
+        .nav { display: flex; gap: 20px; justify-content: center; margin-top: 15px; }
+        .nav a { color: white; text-decoration: none; padding: 10px 20px; background: rgba(255,255,255,0.2); border-radius: 25px; transition: all 0.3s; }
+        .nav a:hover { background: rgba(255,255,255,0.3); }
+        .card { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 25px; margin-bottom: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
+        .table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        .table th { background: #f8f9fa; font-weight: 600; }
+        .btn { padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; text-decoration: none; display: inline-block; font-size: 14px; transition: all 0.3s; margin: 2px; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-warning { background: #ffc107; color: black; }
+        .btn:hover { opacity: 0.8; }
+        .status-active { color: #28a745; font-weight: bold; }
+        .status-inactive { color: #dc3545; font-weight: bold; }
+        .admin-badge { background: #6f42c1; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Manage Users</h1>
+            <div class="nav">
+                <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('admin_users') }}">Manage Users</a>
+                <a href="{{ url_for('admin_create_user') }}">Create User</a>
+                <a href="{{ url_for('admin_global_totp') }}">Global TOTP</a>
+                <a href="{{ url_for('admin_logout') }}">Logout</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3>All Users ({{ users|length }}/30)</h3>
+                <a href="{{ url_for('admin_create_user') }}" class="btn btn-success">+ Create New User</a>
+            </div>
+            
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Balance</th>
+                        <th>Role</th>
+                        <th>Status</th>
+
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>₹{{ "%.2f"|format(user.balance) }}</td>
+                        <td>
+                            {% if user.is_admin %}
+                                <span class="admin-badge">Admin</span>
+                            {% else %}
+                                User
+                            {% endif %}
+                        </td>
+                        <td class="{{ 'status-active' if user.is_active else 'status-inactive' }}">
+                            {{ 'Active' if user.is_active else 'Inactive' }}
+                        </td>
+
+                        <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" class="btn btn-primary">Edit</a>
+                            {% if not user.is_admin %}
+                                <a href="{{ url_for('admin_toggle_user', user_id=user.id) }}" 
+                                   class="btn {{ 'btn-danger' if user.is_active else 'btn-success' }}">
+                                    {{ 'Deactivate' if user.is_active else 'Activate' }}
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
