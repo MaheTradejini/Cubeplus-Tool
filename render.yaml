@@ -20,8 +20,7 @@ services:
         value: totp
       - key: SECRET_KEY
         generateValue: true
-      - key: DATABASE_URL
-        value: sqlite:///app.db
+# DATABASE_URL not needed for SQLite
 
 # databases:
 #   - name: cubeplus-db

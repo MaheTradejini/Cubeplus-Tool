@@ -35,17 +35,9 @@ def create_app():
   from config import SECRET_KEY, DATABASE_URL
   import os
   
-  # Use SQLite for deployment if PostgreSQL fails
-  if 'DATABASE_URL' in os.environ and 'postgresql' in os.environ['DATABASE_URL']:
-      try:
-          import psycopg2
-          database_url = DATABASE_URL
-      except ImportError:
-          # Fallback to SQLite if psycopg2 not available
-          database_url = 'sqlite:///app.db'
-          app.logger.warning('PostgreSQL not available, using SQLite')
-  else:
-      database_url = DATABASE_URL
+  # Force SQLite for deployment
+  database_url = 'sqlite:///app.db'
+  app.logger.info('Using SQLite database')
   
   # Update TRADEJINI_CONFIG with current TOTP
   def update_tradejini_config():
