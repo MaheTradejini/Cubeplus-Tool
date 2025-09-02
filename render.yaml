@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: cubeplus-tool
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -c gunicorn.conf.py wsgi:app
+    envVars:
+      - key: TRADEJINI_APIKEY
+        sync: false
+      - key: TRADEJINI_PASSWORD
+        sync: false
+      - key: TRADEJINI_TWO_FA
+        sync: false
+      - key: TRADEJINI_TWO_FA_TYPE
+        value: totp
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cubeplus-db
+          property: connectionString
+
+databases:
+  - name: cubeplus-db
+    databaseName: cubeplus_tool_db
+    user: cubeplus_user
