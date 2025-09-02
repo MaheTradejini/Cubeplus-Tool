@@ -33,6 +33,19 @@ from sqlalchemy import func
 def create_app():
   app = Flask(__name__)
   from config import SECRET_KEY, DATABASE_URL
+  import os
+  
+  # Use SQLite for deployment if PostgreSQL fails
+  if 'DATABASE_URL' in os.environ and 'postgresql' in os.environ['DATABASE_URL']:
+      try:
+          import psycopg2
+          database_url = DATABASE_URL
+      except ImportError:
+          # Fallback to SQLite if psycopg2 not available
+          database_url = 'sqlite:///app.db'
+          app.logger.warning('PostgreSQL not available, using SQLite')
+  else:
+      database_url = DATABASE_URL
   
   # Update TRADEJINI_CONFIG with current TOTP
   def update_tradejini_config():
@@ -43,7 +56,7 @@ def create_app():
   # Update config on app start
   update_tradejini_config()
   app.config['SECRET_KEY'] = SECRET_KEY
-  app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+  app.config['SQLALCHEMY_DATABASE_URI'] = database_url
   app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
   app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
       'pool_pre_ping': True,
