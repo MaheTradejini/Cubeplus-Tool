@@ -8,12 +8,40 @@ from flask_bcrypt import Bcrypt
 from tradejini_client import TradejiniClient
 from live_price_stream import LivePriceStreamer
 from config import TRADEJINI_CONFIG
+
+def get_current_totp():
+    """Get current TOTP from database or environment"""
+    try:
+        # First try database (production)
+        admin_user = User.query.filter_by(is_admin=True).first()
+        if admin_user:
+            credential = UserCredential.query.filter_by(
+                user_id=admin_user.id,
+                credential_name='GLOBAL_TOTP'
+            ).first()
+            if credential:
+                return credential.credential_value
+    except:
+        pass
+    
+    # Fallback to environment variable
+    import os
+    return os.environ.get('TRADEJINI_TWO_FA', '')
 from sqlalchemy import func
 
 
 def create_app():
   app = Flask(__name__)
   from config import SECRET_KEY, DATABASE_URL
+  
+  # Update TRADEJINI_CONFIG with current TOTP
+  def update_tradejini_config():
+      current_totp = get_current_totp()
+      if current_totp:
+          TRADEJINI_CONFIG['two_fa'] = current_totp
+  
+  # Update config on app start
+  update_tradejini_config()
   app.config['SECRET_KEY'] = SECRET_KEY
   app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
   bcrypt = Bcrypt()
@@ -350,12 +378,35 @@ def create_app():
     form = GlobalTOTPForm()
     
     if form.validate_on_submit():
-        # Update environment variable (Render uses env vars, not .env file)
+        # Store TOTP in database for production persistence
         import os
-        os.environ['TRADEJINI_TWO_FA'] = form.totp_secret.data
-        # Note: In production, update via Render dashboard
+        from models import db
         
-        flash('TOTP updated for current session. Update environment variable in Render dashboard for persistence.', 'warning')
+        # Update current session
+        os.environ['TRADEJINI_TWO_FA'] = form.totp_secret.data
+        
+        # Store in database for persistence across restarts
+        admin_user = User.query.filter_by(is_admin=True).first()
+        if admin_user:
+            # Store TOTP in admin user record or create system config
+            credential = UserCredential.query.filter_by(
+                user_id=admin_user.id, 
+                credential_name='GLOBAL_TOTP'
+            ).first()
+            
+            if credential:
+                credential.credential_value = form.totp_secret.data
+            else:
+                credential = UserCredential(
+                    user_id=admin_user.id,
+                    credential_name='GLOBAL_TOTP',
+                    credential_value=form.totp_secret.data
+                )
+                db.session.add(credential)
+            
+            db.session.commit()
+        
+        flash('Global TOTP updated successfully! Active immediately.', 'success')
         return redirect(url_for('admin_dashboard'))
     
     return render_template("admin_global_totp.html", form=form)
