@@ -44,6 +44,11 @@ def create_app():
   update_tradejini_config()
   app.config['SECRET_KEY'] = SECRET_KEY
   app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+  app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+  app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+      'pool_pre_ping': True,
+      'pool_recycle': 300,
+  }
   bcrypt = Bcrypt()
   socketio = SocketIO(app, cors_allowed_origins="*")
 
