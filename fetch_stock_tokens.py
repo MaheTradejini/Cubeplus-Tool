@@ -52,7 +52,8 @@ def extract_top_50_nse_stocks():
             for item in symbol_data:
                 if isinstance(item, dict):
                     symbol = item.get('symbol', '').upper()
-                    token = item.get('token', '')
+                    token = item.get('toke' \
+                    'n', '')
                     exchange = item.get('exchange', '').upper()
                     
                     # Match NSE equity stocks
