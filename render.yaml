@@ -2,6 +2,7 @@ services:
   - type: web
     name: cubeplus-tool
     env: python
+    runtime: python-3.11
     buildCommand: pip install -r requirements.txt
     startCommand: python wsgi.py
     envVars:
