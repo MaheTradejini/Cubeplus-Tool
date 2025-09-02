@@ -26,8 +26,12 @@ def create_app():
   price_streamer = LivePriceStreamer(socketio)
   
   # Start live stream
-  if not price_streamer.start_live_stream():
-      print("Failed to start live stream - check SDK installation")
+  try:
+      if not price_streamer.start_live_stream():
+          app.logger.warning("Failed to start live stream - check SDK installation")
+  except Exception as e:
+      app.logger.error(f"Live stream initialization error: {e}")
+      # Continue without live stream for deployment
 
   with app.app_context():
     db.create_all()
@@ -346,20 +350,12 @@ def create_app():
     form = GlobalTOTPForm()
     
     if form.validate_on_submit():
-        # Update .env file with new TOTP
+        # Update environment variable (Render uses env vars, not .env file)
         import os
-        env_path = '.env'
-        with open(env_path, 'r') as f:
-            lines = f.readlines()
+        os.environ['TRADEJINI_TWO_FA'] = form.totp_secret.data
+        # Note: In production, update via Render dashboard
         
-        with open(env_path, 'w') as f:
-            for line in lines:
-                if line.startswith('TRADEJINI_TWO_FA='):
-                    f.write(f'TRADEJINI_TWO_FA={form.totp_secret.data}\n')
-                else:
-                    f.write(line)
-        
-        flash('Global TOTP updated successfully! Restart app to apply changes.', 'success')
+        flash('TOTP updated for current session. Update environment variable in Render dashboard for persistence.', 'warning')
         return redirect(url_for('admin_dashboard'))
     
     return render_template("admin_global_totp.html", form=form)
