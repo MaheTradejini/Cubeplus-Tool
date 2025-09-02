@@ -3,7 +3,7 @@ services:
     name: cubeplus-tool
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -c gunicorn.conf.py wsgi:app
+    startCommand: python wsgi.py
     envVars:
       - key: TRADEJINI_APIKEY
         sync: false
