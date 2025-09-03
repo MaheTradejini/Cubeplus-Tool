@@ -20,9 +20,12 @@ services:
         value: totp
       - key: SECRET_KEY
         generateValue: true
-# DATABASE_URL not needed for SQLite
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cubeplus-db
+          property: connectionString
 
-# databases:
-#   - name: cubeplus-db
-#     databaseName: cubeplus_tool_db
-#     user: cubeplus_user
+databases:
+  - name: cubeplus-db
+    databaseName: cubeplus_tool_db
+    user: cubeplus_user

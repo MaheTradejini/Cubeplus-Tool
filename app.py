@@ -35,9 +35,8 @@ def create_app():
   from config import SECRET_KEY, DATABASE_URL
   import os
   
-  # Force SQLite for deployment
-  database_url = 'sqlite:///app.db'
-  app.logger.info('Using SQLite database')
+  # Use PostgreSQL for production with TradJini integration
+  database_url = DATABASE_URL
   
   # Update TRADEJINI_CONFIG with current TOTP
   def update_tradejini_config():
