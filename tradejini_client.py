@@ -50,109 +50,96 @@ class TradejiniClient:
             # TradJini Individual Token API (Correct Format from Documentation)
             url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
             
+            import logging
+            logging.basicConfig(level=logging.INFO)
+            logger = logging.getLogger(__name__)
+            
+            logger.info(f"URL: {url}")
+            logger.info(f"Authenticating with TOTP: {current_totp}")
+            logger.info(f"API Key: {TRADEJINI_CONFIG['apikey']}")
+            
+            # Correct format as per TradJini API documentation
             headers = {
                 "Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}",
                 "Content-Type": "application/x-www-form-urlencoded"
             }
             
+            # Form data as specified in documentation
             data = {
                 "password": TRADEJINI_CONFIG['password'],
-                "twoFa": current_totp,
-                "twoFaTyp": "totp"
+                "twoFa": current_totp,  # Note: 'twoFa' not 'two_fa'
+                "twoFaTyp": "totp"      # Note: 'twoFaTyp' not 'two_fa_type', lowercase 'totp'
             }
             
-            response = requests.post(url, headers=headers, data=data, timeout=10)
+            logger.info(f"Headers: {headers}")
+            logger.info(f"Data: {data}")
+            
+            response = requests.post(url, headers=headers, data=data, timeout=30)
+            logger.info(f"Auth response status: {response.status_code}")
+            logger.info(f"Auth response: {response.text}")
             
             if response.status_code == 200:
                 try:
-                    resp_data = response.json()
-                    if resp_data.get('access_token'):
-                        self.access_token = resp_data.get('access_token')
+                    data = response.json()
+                    logger.info(f"Parsed response: {data}")
+                    if data.get('status') == 'success' or data.get('access_token'):
+                        self.access_token = data.get('access_token') or data.get('token')
+                        logger.info(f"Authentication successful! Token: {self.access_token[:10]}****")
                         return True
                 except:
-                    pass
+                    logger.error("Failed to parse JSON response")
             
+            logger.error(f"Authentication failed: {response.text}")
             return False
-        except:
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Authentication error: {e}")
             return False
     
     def get_stock_list(self):
         """Get live stock prices from TradJini API"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         # Always try to get stored token first
         if not self.access_token:
             self.get_stored_token()
         
         if not self.access_token:
+            logger.warning("No access token available, using fallback data")
             return self.get_fallback_stocks()
         
-        # Get live prices from streaming + fallback for missing ones
-        try:
-            from live_price_stream import live_prices
-            stocks = []
-            
-            # First, try to get live streaming prices
-            for symbol, token in STOCK_TOKENS.items():
-                live_price = live_prices.get(symbol, 0)
-                if live_price > 0:
-                    stocks.append({
-                        'symbol': symbol,
-                        'symbol_id': token,
-                        'price': live_price,
-                        'name': symbol.replace('_', ' ').title(),
-                        'change': 0
-                    })
-            
-            # If we have some live prices, fill the rest with fallback
-            if len(stocks) > 0:
-                fallback_stocks = self.get_fallback_stocks()
-                existing_symbols = {stock['symbol'] for stock in stocks}
-                for fallback_stock in fallback_stocks:
-                    if fallback_stock['symbol'] not in existing_symbols:
-                        stocks.append(fallback_stock)
-                return stocks
-            
-            # If no live prices, try a few quick API calls (max 3 stocks)
-            if self.access_token:
-                test_tokens = list(STOCK_TOKENS.items())[:3]  # Only test 3 stocks
-                for symbol, token in test_tokens:
-                    try:
-                        price_data = self.get_live_price_quick(token)
-                        if price_data and price_data.get('ltp', 0) > 0:
-                            stocks.append({
-                                'symbol': symbol,
-                                'symbol_id': token,
-                                'price': price_data.get('ltp', 0),
-                                'name': symbol.replace('_', ' ').title(),
-                                'change': price_data.get('change', 0)
-                            })
-                    except:
-                        continue
-            
-            # Fill remaining with fallback
-            fallback_stocks = self.get_fallback_stocks()
-            existing_symbols = {stock['symbol'] for stock in stocks}
-            for fallback_stock in fallback_stocks:
-                if fallback_stock['symbol'] not in existing_symbols:
-                    stocks.append(fallback_stock)
-            
-            return stocks
-            
-        except:
-            return self.get_fallback_stocks()
-    
-    def get_live_price_quick(self, token):
-        """Quick single API call for testing"""
-        if not self.access_token:
-            return None
-        try:
-            url = f"{self.base_url}/api-gw/mkt-data/quote"
-            headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}:{self.access_token}"}
-            response = requests.get(url, headers=headers, params={"token": token}, timeout=3)
-            if response.status_code == 200:
-                return response.json()
-        except:
-            pass
-        return None
+        logger.info(f"Using access token: {self.access_token[:10]}****")
+        
+        # TradJini quote API returns 404 - use streaming data + fallback
+        logger.info("Quote API not available, using streaming + fallback system")
+        
+        # Get live prices from streaming if available
+        from live_price_stream import live_prices
+        stocks = []
+        
+        for symbol, token in STOCK_TOKENS.items():
+            # Check if we have live streaming price
+            live_price = live_prices.get(symbol, 0)
+            if live_price > 0:
+                stocks.append({
+                    'symbol': symbol,
+                    'symbol_id': token,
+                    'price': live_price,
+                    'name': symbol.replace('_', ' ').title(),
+                    'change': 0  # Will be calculated by streaming
+                })
+                logger.info(f"Using streaming price for {symbol}: {live_price}")
+        
+        # Fill remaining stocks with fallback data
+        fallback_stocks = self.get_fallback_stocks()
+        existing_symbols = {stock['symbol'] for stock in stocks}
+        for fallback_stock in fallback_stocks:
+            if fallback_stock['symbol'] not in existing_symbols:
+                stocks.append(fallback_stock)
+        
+        logger.info(f"Returning {len(stocks)} stocks ({len([s for s in stocks if s['price'] > 1000])} with streaming data)")
+        return stocks
     
     def get_live_price(self, token):
         """Get live price for a specific token"""
