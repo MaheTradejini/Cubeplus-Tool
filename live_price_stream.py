@@ -60,13 +60,15 @@ class LivePriceStreamer:
             self.is_connected = True
             print("TradJini WebSocket connected")
             
+            # Subscribe to live data for all stocks (TradJini format)
             stock_token_list = list(STOCK_TOKENS.values())
             try:
-                nx_stream.subscribeL1(stock_token_list)
-                nx_stream.subscribeL1SnapShot(stock_token_list)
-                print(f"Subscribed to {len(stock_token_list)} stocks")
-            except:
-                pass
+                # Subscribe to L1 data (live prices) - order matters
+                nx_stream.subscribeL1SnapShot(stock_token_list)  # Get snapshot first
+                nx_stream.subscribeL1(stock_token_list)          # Then live updates
+                print(f"Subscribed to {len(stock_token_list)} stocks for live prices")
+            except Exception as e:
+                print(f"Subscription error: {e}")
                 
         elif event['s'] == "closed":
             self.is_connected = False
@@ -79,9 +81,9 @@ class LivePriceStreamer:
                 if self.get_access_token():
                     auth_token = f"{TRADEJINI_CONFIG['apikey']}:{self.access_token}"
                     try:
-                        nx_stream.reconnect(auth_token)
-                    except:
-                        pass
+                        nx_stream.reconnect()
+                    except Exception as e:
+                        print(f"Reconnection error: {e}")
                 
         elif event['s'] == "error":
             self.is_connected = False
