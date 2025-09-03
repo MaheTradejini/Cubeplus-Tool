@@ -4,17 +4,22 @@ import time
 import threading
 
 # Add the streaming SDK path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'python-sdk', 'streaming'))
+sdk_path = os.path.join(os.path.dirname(__file__), 'python-sdk', 'streaming')
+if sdk_path not in sys.path:
+    sys.path.append(sdk_path)
 
+# Import TradJini SDK with proper error handling
 try:
-    from nxtradstream import NxtradStream
+    from nxtradstream import NxtradStream  # type: ignore
     SDK_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     SDK_AVAILABLE = False
-    print("TradJini SDK not available")
+    NxtradStream = None  # type: ignore
+    print(f"TradJini SDK not available: {e}")
 
 from config import TRADEJINI_CONFIG, STOCK_TOKENS
-from token_cache import token_cache
+# Remove token_cache dependency - using database tokens now
+# from token_cache import token_cache
 
 # Global price storage
 live_prices = {}
@@ -33,12 +38,21 @@ class LivePriceStreamer:
             self.token_to_symbol[token] = symbol
         
     def get_access_token(self):
-        """Get access token using cached token system"""
+        """Get access token from database (stored by admin)"""
         try:
-            self.access_token = token_cache.get_access_token()
-            return self.access_token is not None
-        except:
-            return False
+            from models import User, UserCredential
+            admin_user = User.query.filter_by(is_admin=True).first()
+            if admin_user:
+                credential = UserCredential.query.filter_by(
+                    user_id=admin_user.id,
+                    credential_name='ACCESS_TOKEN'
+                ).first()
+                if credential and not credential.credential_value.startswith('MOCK_'):
+                    self.access_token = credential.credential_value
+                    return True
+        except Exception as e:
+            print(f"Error getting access token: {e}")
+        return False
     
     def connect_callback(self, nx_stream, event):
         """Handle TradJini WebSocket connection events"""
@@ -46,26 +60,30 @@ class LivePriceStreamer:
             self.is_connected = True
             print("TradJini WebSocket connected")
             
+            # Subscribe to live data for all stocks (TradJini format)
             stock_token_list = list(STOCK_TOKENS.values())
             try:
-                nx_stream.subscribeL1(stock_token_list)
-                nx_stream.subscribeL1SnapShot(stock_token_list)
-                print(f"Subscribed to {len(stock_token_list)} stocks")
-            except:
-                pass
+                # Subscribe to L1 data (live prices) - order matters
+                nx_stream.subscribeL1SnapShot(stock_token_list)  # Get snapshot first
+                nx_stream.subscribeL1(stock_token_list)          # Then live updates
+                print(f"Subscribed to {len(stock_token_list)} stocks for live prices")
+            except Exception as e:
+                print(f"Subscription error: {e}")
                 
         elif event['s'] == "closed":
             self.is_connected = False
             reason = event.get("reason", "Unknown")
+            print(f"WebSocket closed: {reason}")
             
             if reason != "Unauthorized Access":
+                # Try to reconnect after 30 seconds
                 time.sleep(30)
-                token_cache.invalidate_cache()
                 if self.get_access_token():
                     auth_token = f"{TRADEJINI_CONFIG['apikey']}:{self.access_token}"
-                    nx_stream.reconnect(auth_token)
-            else:
-                token_cache.invalidate_cache()
+                    try:
+                        nx_stream.reconnect()
+                    except Exception as e:
+                        print(f"Reconnection error: {e}")
                 
         elif event['s'] == "error":
             self.is_connected = False
@@ -102,17 +120,20 @@ class LivePriceStreamer:
         try:
             auth_token = f"{TRADEJINI_CONFIG['apikey']}:{self.access_token}"
             
-            self.nx_stream = NxtradStream(
-                'api.tradejini.com',
-                stream_cb=self.stream_callback,
-                connect_cb=self.connect_callback
-            )
+            if NxtradStream is not None:
+                self.nx_stream = NxtradStream(
+                    'api.tradejini.com',
+                    stream_cb=self.stream_callback,
+                    connect_cb=self.connect_callback
+                )
+            else:
+                return False
             
             def connect_stream():
                 try:
                     self.nx_stream.connect(auth_token)
-                except:
-                    token_cache.invalidate_cache()
+                except Exception as e:
+                    print(f"Stream connection error: {e}")
             
             stream_thread = threading.Thread(target=connect_stream, daemon=True)
             stream_thread.start()
