@@ -67,6 +67,20 @@ def create_app():
               return {'status': 'failed', 'message': 'TradJini authentication failed'}
       except Exception as e:
           return {'status': 'error', 'message': str(e)}
+  
+  # Check streaming status
+  @app.route('/streaming-status')
+  def streaming_status():
+      """Check live price streaming status"""
+      try:
+          status = price_streamer.get_connection_status()
+          return {
+              'status': 'success',
+              'streaming': status,
+              'live_prices_count': len(price_streamer.live_prices) if hasattr(price_streamer, 'live_prices') else 0
+          }
+      except Exception as e:
+          return {'status': 'error', 'message': str(e)}
   app.config['SECRET_KEY'] = SECRET_KEY
   app.config['SQLALCHEMY_DATABASE_URI'] = database_url
   app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -178,7 +192,7 @@ def create_app():
         
         stocks = []
         base_time = int(time.time())
-        for i, (symbol, token) in enumerate(list(STOCK_TOKENS.items())[:20]):
+        for i, (symbol, token) in enumerate(STOCK_TOKENS.items()):
             # Generate realistic fluctuating prices
             base_price = 500 + (i * 100)  # Different base prices
             fluctuation = random.uniform(-0.05, 0.05)  # ±5% fluctuation

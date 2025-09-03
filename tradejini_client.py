@@ -98,27 +98,45 @@ class TradejiniClient:
     
     def get_stock_list(self):
         """Get live stock prices from TradJini API"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Always try to get stored token first
         if not self.access_token:
-            raise Exception("Not authenticated")
+            self.get_stored_token()
+        
+        if not self.access_token:
+            logger.warning("No access token available, using fallback data")
+            return self.get_fallback_stocks()
+        
+        logger.info(f"Using access token: {self.access_token[:10]}****")
         
         stocks = []
         try:
-            # Get live prices for configured stocks
-            for symbol, token in list(STOCK_TOKENS.items())[:20]:
+            # Get live prices for all 50 configured stocks
+            for symbol, token in STOCK_TOKENS.items():
                 price_data = self.get_live_price(token)
                 if price_data:
+                    logger.info(f"Got live price for {symbol}: {price_data}")
                     stocks.append({
                         'symbol': symbol,
                         'symbol_id': token,
-                        'price': price_data.get('ltp', 0),
+                        'price': price_data.get('ltp', price_data.get('price', 0)),
                         'name': symbol.replace('_', ' ').title(),
-                        'change': price_data.get('change', 0)
+                        'change': price_data.get('change', price_data.get('chng', 0))
                     })
+                else:
+                    logger.warning(f"No price data for {symbol} ({token})")
             
-            return stocks if stocks else self.get_fallback_stocks()
+            if stocks:
+                logger.info(f"Successfully got {len(stocks)} live prices")
+                return stocks
+            else:
+                logger.warning("No live prices available, using fallback")
+                return self.get_fallback_stocks()
             
         except Exception as e:
-            print(f"Failed to get stock list: {e}")
+            logger.error(f"Failed to get stock list: {e}")
             return self.get_fallback_stocks()
     
     def get_live_price(self, token):
@@ -127,17 +145,53 @@ class TradejiniClient:
             return None
             
         try:
-            url = f"{self.base_url}/api/mkt-data/quote"
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            # Try different TradJini quote API endpoints
+            endpoints = [
+                f"{self.base_url}/api/mkt-data/quote",
+                f"{self.base_url}/api-gw/mkt-data/quote",
+                f"{self.base_url}/quote"
+            ]
+            
             headers = {
                 "Authorization": f"{TRADEJINI_CONFIG['apikey']}:{self.access_token}"
             }
-            params = {"token": token}
             
-            response = requests.get(url, headers=headers, params=params)
-            if response.status_code == 200:
-                return response.json()
+            for url in endpoints:
+                try:
+                    logger.info(f"Trying quote API: {url} for token: {token}")
+                    
+                    # Try with token as query parameter
+                    response = requests.get(url, headers=headers, params={"token": token}, timeout=10)
+                    logger.info(f"Response status: {response.status_code}")
+                    logger.info(f"Response: {response.text[:200]}...")
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data and ('ltp' in data or 'price' in data):
+                            return data
+                    
+                    # Try with token in URL path
+                    response = requests.get(f"{url}/{token}", headers=headers, timeout=10)
+                    logger.info(f"Path response status: {response.status_code}")
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data and ('ltp' in data or 'price' in data):
+                            return data
+                            
+                except Exception as e:
+                    logger.error(f"Error with {url}: {e}")
+                    continue
+            
+            logger.warning(f"All quote APIs failed for token: {token}")
             return None
-        except:
+            
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"get_live_price error: {e}")
             return None
     
     def get_fallback_stocks(self):
@@ -151,7 +205,7 @@ class TradejiniClient:
             "TITAN": 2800, "ULTRACEMCO": 7500, "NESTLEIND": 18000, "WIPRO": 400, "NTPC": 180
         }
         
-        for symbol, token in list(STOCK_TOKENS.items())[:20]:
+        for symbol, token in STOCK_TOKENS.items():
             base_price = base_prices.get(symbol, 1000)
             fluctuation = random.uniform(-0.05, 0.05)
             price = round(base_price * (1 + fluctuation), 2)
