@@ -4,17 +4,22 @@ import time
 import threading
 
 # Add the streaming SDK path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'python-sdk', 'streaming'))
+sdk_path = os.path.join(os.path.dirname(__file__), 'python-sdk', 'streaming')
+if sdk_path not in sys.path:
+    sys.path.append(sdk_path)
 
+# Import TradJini SDK with proper error handling
 try:
-    from nxtradstream import NxtradStream
+    from nxtradstream import NxtradStream  # type: ignore
     SDK_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     SDK_AVAILABLE = False
-    print("TradJini SDK not available")
+    NxtradStream = None  # type: ignore
+    print(f"TradJini SDK not available: {e}")
 
 from config import TRADEJINI_CONFIG, STOCK_TOKENS
-from token_cache import token_cache
+# Remove token_cache dependency - using database tokens now
+# from token_cache import token_cache
 
 # Global price storage
 live_prices = {}
@@ -113,11 +118,14 @@ class LivePriceStreamer:
         try:
             auth_token = f"{TRADEJINI_CONFIG['apikey']}:{self.access_token}"
             
-            self.nx_stream = NxtradStream(
-                'api.tradejini.com',
-                stream_cb=self.stream_callback,
-                connect_cb=self.connect_callback
-            )
+            if NxtradStream is not None:
+                self.nx_stream = NxtradStream(
+                    'api.tradejini.com',
+                    stream_cb=self.stream_callback,
+                    connect_cb=self.connect_callback
+                )
+            else:
+                return False
             
             def connect_stream():
                 try:

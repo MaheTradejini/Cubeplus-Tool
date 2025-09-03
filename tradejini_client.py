@@ -130,6 +130,12 @@ class TradejiniClient:
             
             if stocks:
                 logger.info(f"Successfully got {len(stocks)} live prices")
+                # Fill missing stocks with fallback data
+                fallback_stocks = self.get_fallback_stocks()
+                existing_symbols = {stock['symbol'] for stock in stocks}
+                for fallback_stock in fallback_stocks:
+                    if fallback_stock['symbol'] not in existing_symbols:
+                        stocks.append(fallback_stock)
                 return stocks
             else:
                 logger.warning("No live prices available, using fallback")
@@ -148,15 +154,16 @@ class TradejiniClient:
             import logging
             logger = logging.getLogger(__name__)
             
-            # Try different TradJini quote API endpoints
+            # Try different TradJini quote API endpoints based on documentation
             endpoints = [
-                f"{self.base_url}/api/mkt-data/quote",
                 f"{self.base_url}/api-gw/mkt-data/quote",
+                f"{self.base_url}/api/mkt-data/quote",
                 f"{self.base_url}/quote"
             ]
             
+            # TradJini quote API requires Bearer token format
             headers = {
-                "Authorization": f"{TRADEJINI_CONFIG['apikey']}:{self.access_token}"
+                "Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}:{self.access_token}"
             }
             
             for url in endpoints:
