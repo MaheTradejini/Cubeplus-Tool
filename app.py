@@ -35,9 +35,8 @@ def create_app():
   from config import SECRET_KEY, DATABASE_URL
   import os
   
-  # Use SQLite for production (PostgreSQL has Python 3.13 compatibility issues)
+  # Use SQLite for Cloudflare deployment
   database_url = 'sqlite:///app.db'
-  app.logger.info('Using SQLite database for production')
   
   # Update TRADEJINI_CONFIG with current TOTP
   def update_tradejini_config():
@@ -551,8 +550,9 @@ def create_app():
   return app, socketio
 
 
+# Cloudflare Workers entry point
 if __name__ == '__main__':
     import os
     app, socketio = create_app()
-    port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, debug=False, host='0.0.0.0', port=port)
+    port = int(os.environ.get('PORT', 8000))
+    app.run(debug=False, host='0.0.0.0', port=port)
