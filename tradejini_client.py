@@ -11,23 +11,44 @@ class TradejiniClient:
     def authenticate(self):
         """Authenticate with TradJini API"""
         try:
+            # Get current TOTP from database or environment
+            current_totp = TRADEJINI_CONFIG.get('two_fa', '')
+            try:
+                from models import User, UserCredential
+                admin_user = User.query.filter_by(is_admin=True).first()
+                if admin_user:
+                    credential = UserCredential.query.filter_by(
+                        user_id=admin_user.id,
+                        credential_name='GLOBAL_TOTP'
+                    ).first()
+                    if credential:
+                        current_totp = credential.credential_value
+            except:
+                pass
+            
             url = f"{self.base_url}/api/auth/login"
             payload = {
                 "apikey": TRADEJINI_CONFIG['apikey'],
                 "password": TRADEJINI_CONFIG['password'],
-                "two_fa": TRADEJINI_CONFIG['two_fa'],
+                "two_fa": current_totp,
                 "two_fa_type": TRADEJINI_CONFIG['two_fa_type']
             }
             
+            print(f"Authenticating with TOTP: {current_totp[:2]}****")
             response = requests.post(url, json=payload)
+            print(f"Auth response status: {response.status_code}")
+            
             if response.status_code == 200:
                 data = response.json()
+                print(f"Auth response: {data}")
                 if data.get('status') == 'success':
                     self.access_token = data.get('access_token')
+                    print("Authentication successful!")
                     return True
+            print(f"Authentication failed: {response.text}")
             return False
         except Exception as e:
-            print(f"Authentication failed: {e}")
+            print(f"Authentication error: {e}")
             return False
     
     def get_stock_list(self):
