@@ -34,21 +34,28 @@ class TradejiniClient:
                 "two_fa_type": TRADEJINI_CONFIG['two_fa_type']
             }
             
-            print(f"Authenticating with TOTP: {current_totp[:2]}****")
-            response = requests.post(url, json=payload)
-            print(f"Auth response status: {response.status_code}")
+            import logging
+            logging.basicConfig(level=logging.INFO)
+            logger = logging.getLogger(__name__)
+            
+            logger.info(f"Authenticating with TOTP: {current_totp[:2]}****")
+            logger.info(f"API Key: {TRADEJINI_CONFIG['apikey'][:10]}****")
+            
+            response = requests.post(url, json=payload, timeout=30)
+            logger.info(f"Auth response status: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
-                print(f"Auth response: {data}")
+                logger.info(f"Auth response: {data}")
                 if data.get('status') == 'success':
                     self.access_token = data.get('access_token')
-                    print("Authentication successful!")
+                    logger.info("Authentication successful!")
                     return True
-            print(f"Authentication failed: {response.text}")
+            logger.error(f"Authentication failed: {response.text}")
             return False
         except Exception as e:
-            print(f"Authentication error: {e}")
+            import logging
+            logging.getLogger(__name__).error(f"Authentication error: {e}")
             return False
     
     def get_stock_list(self):

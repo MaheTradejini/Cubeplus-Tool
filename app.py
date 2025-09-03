@@ -54,6 +54,19 @@ def create_app():
       """Internal endpoint to refresh TOTP config"""
       update_tradejini_config()
       return {'status': 'updated'}
+  
+  # Test TradJini authentication
+  @app.route('/test-tradejini')
+  def test_tradejini():
+      """Test TradJini API authentication"""
+      try:
+          client = TradejiniClient()
+          if client.access_token:
+              return {'status': 'success', 'message': 'TradJini authenticated successfully'}
+          else:
+              return {'status': 'failed', 'message': 'TradJini authentication failed'}
+      except Exception as e:
+          return {'status': 'error', 'message': str(e)}
   app.config['SECRET_KEY'] = SECRET_KEY
   app.config['SQLALCHEMY_DATABASE_URI'] = database_url
   app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
