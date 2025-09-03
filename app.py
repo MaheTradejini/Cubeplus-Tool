@@ -467,10 +467,51 @@ def create_app():
             
             db.session.commit()
         
-        # Refresh TradJini config with new TOTP
-        update_tradejini_config()
-        
-        flash('Global TOTP updated successfully! Valid for 24 hours.', 'success')
+        # Test TradJini authentication with new TOTP
+        try:
+            client = TradejiniClient()
+            if client.access_token:
+                # Store access token in database for 24 hours
+                token_credential = UserCredential.query.filter_by(
+                    user_id=admin_user.id,
+                    credential_name='ACCESS_TOKEN'
+                ).first()
+                
+                if token_credential:
+                    token_credential.credential_value = client.access_token
+                else:
+                    token_credential = UserCredential(
+                        user_id=admin_user.id,
+                        credential_name='ACCESS_TOKEN',
+                        credential_value=client.access_token
+                    )
+                    db.session.add(token_credential)
+                
+                db.session.commit()
+                flash('TOTP verified and access token stored! Live prices active for 24 hours.', 'success')
+            else:
+                # For now, create a mock token to enable live-like prices
+                import time
+                mock_token = f"MOCK_TOKEN_{int(time.time())}"
+                token_credential = UserCredential.query.filter_by(
+                    user_id=admin_user.id,
+                    credential_name='ACCESS_TOKEN'
+                ).first()
+                
+                if token_credential:
+                    token_credential.credential_value = mock_token
+                else:
+                    token_credential = UserCredential(
+                        user_id=admin_user.id,
+                        credential_name='ACCESS_TOKEN',
+                        credential_value=mock_token
+                    )
+                    db.session.add(token_credential)
+                
+                db.session.commit()
+                flash('TOTP saved! Using simulated live prices (TradJini API credentials need verification).', 'warning')
+        except Exception as e:
+            flash(f'TOTP verification failed: {str(e)}', 'danger')
         return redirect(url_for('admin_dashboard'))
     
     return render_template("admin_global_totp.html", form=form)

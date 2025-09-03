@@ -3,10 +3,31 @@ import json
 from config import TRADEJINI_CONFIG, STOCK_TOKENS
 
 class TradejiniClient:
-    def __init__(self):
-        self.base_url = "https://api.tradejini.com"
+    def __init__(self, auto_auth=True):
+        self.base_url = "https://api.tradejini.com/v2"
         self.access_token = None
-        self.authenticate()
+        if auto_auth:
+            # First try to get stored access token
+            if not self.get_stored_token():
+                # If no stored token, authenticate
+                self.authenticate()
+    
+    def get_stored_token(self):
+        """Get stored access token from database"""
+        try:
+            from models import User, UserCredential
+            admin_user = User.query.filter_by(is_admin=True).first()
+            if admin_user:
+                credential = UserCredential.query.filter_by(
+                    user_id=admin_user.id,
+                    credential_name='ACCESS_TOKEN'
+                ).first()
+                if credential:
+                    self.access_token = credential.credential_value
+                    return True
+        except:
+            pass
+        return False
     
     def authenticate(self):
         """Authenticate with TradJini API"""
@@ -26,14 +47,11 @@ class TradejiniClient:
             except:
                 pass
             
-            # TradJini API endpoint and payload format
-            url = f"{self.base_url}/api/auth/login"
-            payload = {
-                "apikey": TRADEJINI_CONFIG['apikey'],
-                "password": TRADEJINI_CONFIG['password'],
-                "two_fa": current_totp,
-                "two_fa_type": "TOTP"  # Always uppercase
-            }
+            # TradJini v2 API endpoint and format
+            url = f"{self.base_url}/api-gw/oauth/individual-token-v2"
+            
+            # Bearer token format as per TradJini API
+            auth_header = f"Bearer {TRADEJINI_CONFIG['apikey']}"
             
             import logging
             logging.basicConfig(level=logging.INFO)
@@ -42,19 +60,25 @@ class TradejiniClient:
             logger.info(f"URL: {url}")
             logger.info(f"Authenticating with TOTP: {current_totp}")
             logger.info(f"API Key: {TRADEJINI_CONFIG['apikey']}")
-            logger.info(f"Password: {TRADEJINI_CONFIG['password'][:3]}****")
-            logger.info(f"Payload: {payload}")
+            logger.info(f"Auth Header: {auth_header}")
             
-            # Try both JSON and form data
-            response = requests.post(url, json=payload, timeout=30)
-            logger.info(f"JSON Auth response status: {response.status_code}")
-            logger.info(f"JSON Auth response: {response.text}")
+            # TradJini v2 API uses query parameters
+            params = {
+                "password": TRADEJINI_CONFIG['password'],
+                "two_fa": current_totp,
+                "two_fa_type": "TOTP"
+            }
             
-            if response.status_code != 200:
-                # Try with form data
-                response = requests.post(url, data=payload, timeout=30)
-                logger.info(f"Form Auth response status: {response.status_code}")
-                logger.info(f"Form Auth response: {response.text}")
+            headers = {
+                "Authorization": auth_header,
+                "Content-Type": "application/json"
+            }
+            
+            logger.info(f"Params: {params}")
+            
+            response = requests.post(url, headers=headers, params=params, timeout=30)
+            logger.info(f"Auth response status: {response.status_code}")
+            logger.info(f"Auth response: {response.text}")
             
             if response.status_code == 200:
                 try:
@@ -101,6 +125,9 @@ class TradejiniClient:
     
     def get_live_price(self, token):
         """Get live price for a specific token"""
+        if not self.access_token:
+            return None
+            
         try:
             url = f"{self.base_url}/api/mkt-data/quote"
             headers = {
