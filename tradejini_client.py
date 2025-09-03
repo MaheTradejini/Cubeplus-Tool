@@ -26,31 +26,47 @@ class TradejiniClient:
             except:
                 pass
             
-            url = f"{self.base_url}/login"
+            # TradJini API endpoint and payload format
+            url = f"{self.base_url}/api/auth/login"
             payload = {
                 "apikey": TRADEJINI_CONFIG['apikey'],
                 "password": TRADEJINI_CONFIG['password'],
                 "two_fa": current_totp,
-                "two_fa_type": TRADEJINI_CONFIG['two_fa_type']
+                "two_fa_type": "TOTP"  # Always uppercase
             }
             
             import logging
             logging.basicConfig(level=logging.INFO)
             logger = logging.getLogger(__name__)
             
-            logger.info(f"Authenticating with TOTP: {current_totp[:2]}****")
-            logger.info(f"API Key: {TRADEJINI_CONFIG['apikey'][:10]}****")
+            logger.info(f"URL: {url}")
+            logger.info(f"Authenticating with TOTP: {current_totp}")
+            logger.info(f"API Key: {TRADEJINI_CONFIG['apikey']}")
+            logger.info(f"Password: {TRADEJINI_CONFIG['password'][:3]}****")
+            logger.info(f"Payload: {payload}")
             
-            response = requests.post(url, data=payload, timeout=30)
-            logger.info(f"Auth response status: {response.status_code}")
+            # Try both JSON and form data
+            response = requests.post(url, json=payload, timeout=30)
+            logger.info(f"JSON Auth response status: {response.status_code}")
+            logger.info(f"JSON Auth response: {response.text}")
+            
+            if response.status_code != 200:
+                # Try with form data
+                response = requests.post(url, data=payload, timeout=30)
+                logger.info(f"Form Auth response status: {response.status_code}")
+                logger.info(f"Form Auth response: {response.text}")
             
             if response.status_code == 200:
-                data = response.json()
-                logger.info(f"Auth response: {data}")
-                if data.get('status') == 'success':
-                    self.access_token = data.get('access_token')
-                    logger.info("Authentication successful!")
-                    return True
+                try:
+                    data = response.json()
+                    logger.info(f"Parsed response: {data}")
+                    if data.get('status') == 'success' or data.get('access_token'):
+                        self.access_token = data.get('access_token') or data.get('token')
+                        logger.info(f"Authentication successful! Token: {self.access_token[:10]}****")
+                        return True
+                except:
+                    logger.error("Failed to parse JSON response")
+            
             logger.error(f"Authentication failed: {response.text}")
             return False
         except Exception as e:
