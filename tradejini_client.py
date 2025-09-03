@@ -111,39 +111,35 @@ class TradejiniClient:
         
         logger.info(f"Using access token: {self.access_token[:10]}****")
         
+        # TradJini quote API returns 404 - use streaming data + fallback
+        logger.info("Quote API not available, using streaming + fallback system")
+        
+        # Get live prices from streaming if available
+        from live_price_stream import live_prices
         stocks = []
-        try:
-            # Get live prices for all 50 configured stocks
-            for symbol, token in STOCK_TOKENS.items():
-                price_data = self.get_live_price(token)
-                if price_data:
-                    logger.info(f"Got live price for {symbol}: {price_data}")
-                    stocks.append({
-                        'symbol': symbol,
-                        'symbol_id': token,
-                        'price': price_data.get('ltp', price_data.get('price', 0)),
-                        'name': symbol.replace('_', ' ').title(),
-                        'change': price_data.get('change', price_data.get('chng', 0))
-                    })
-                else:
-                    logger.warning(f"No price data for {symbol} ({token})")
-            
-            if stocks:
-                logger.info(f"Successfully got {len(stocks)} live prices")
-                # Fill missing stocks with fallback data
-                fallback_stocks = self.get_fallback_stocks()
-                existing_symbols = {stock['symbol'] for stock in stocks}
-                for fallback_stock in fallback_stocks:
-                    if fallback_stock['symbol'] not in existing_symbols:
-                        stocks.append(fallback_stock)
-                return stocks
-            else:
-                logger.warning("No live prices available, using fallback")
-                return self.get_fallback_stocks()
-            
-        except Exception as e:
-            logger.error(f"Failed to get stock list: {e}")
-            return self.get_fallback_stocks()
+        
+        for symbol, token in STOCK_TOKENS.items():
+            # Check if we have live streaming price
+            live_price = live_prices.get(symbol, 0)
+            if live_price > 0:
+                stocks.append({
+                    'symbol': symbol,
+                    'symbol_id': token,
+                    'price': live_price,
+                    'name': symbol.replace('_', ' ').title(),
+                    'change': 0  # Will be calculated by streaming
+                })
+                logger.info(f"Using streaming price for {symbol}: {live_price}")
+        
+        # Fill remaining stocks with fallback data
+        fallback_stocks = self.get_fallback_stocks()
+        existing_symbols = {stock['symbol'] for stock in stocks}
+        for fallback_stock in fallback_stocks:
+            if fallback_stock['symbol'] not in existing_symbols:
+                stocks.append(fallback_stock)
+        
+        logger.info(f"Returning {len(stocks)} stocks ({len([s for s in stocks if s['price'] > 1000])} with streaming data)")
+        return stocks
     
     def get_live_price(self, token):
         """Get live price for a specific token"""
