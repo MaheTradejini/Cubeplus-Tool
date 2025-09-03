@@ -26,7 +26,7 @@ class TradejiniClient:
             except:
                 pass
             
-            url = f"{self.base_url}/api/auth/login"
+            url = f"{self.base_url}/login"
             payload = {
                 "apikey": TRADEJINI_CONFIG['apikey'],
                 "password": TRADEJINI_CONFIG['password'],
@@ -41,7 +41,7 @@ class TradejiniClient:
             logger.info(f"Authenticating with TOTP: {current_totp[:2]}****")
             logger.info(f"API Key: {TRADEJINI_CONFIG['apikey'][:10]}****")
             
-            response = requests.post(url, json=payload, timeout=30)
+            response = requests.post(url, data=payload, timeout=30)
             logger.info(f"Auth response status: {response.status_code}")
             
             if response.status_code == 200:
