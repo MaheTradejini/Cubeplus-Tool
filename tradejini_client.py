@@ -85,11 +85,12 @@ class TradejiniClient:
         if not self.access_token:
             return self.get_fallback_stocks()
         
-        # Use streaming data + fallback (no API calls to avoid timeout)
+        # Get live prices from streaming + fallback for missing ones
         try:
             from live_price_stream import live_prices
             stocks = []
             
+            # First, try to get live streaming prices
             for symbol, token in STOCK_TOKENS.items():
                 live_price = live_prices.get(symbol, 0)
                 if live_price > 0:
@@ -101,7 +102,33 @@ class TradejiniClient:
                         'change': 0
                     })
             
-            # Fill with fallback data
+            # If we have some live prices, fill the rest with fallback
+            if len(stocks) > 0:
+                fallback_stocks = self.get_fallback_stocks()
+                existing_symbols = {stock['symbol'] for stock in stocks}
+                for fallback_stock in fallback_stocks:
+                    if fallback_stock['symbol'] not in existing_symbols:
+                        stocks.append(fallback_stock)
+                return stocks
+            
+            # If no live prices, try a few quick API calls (max 3 stocks)
+            if self.access_token:
+                test_tokens = list(STOCK_TOKENS.items())[:3]  # Only test 3 stocks
+                for symbol, token in test_tokens:
+                    try:
+                        price_data = self.get_live_price_quick(token)
+                        if price_data and price_data.get('ltp', 0) > 0:
+                            stocks.append({
+                                'symbol': symbol,
+                                'symbol_id': token,
+                                'price': price_data.get('ltp', 0),
+                                'name': symbol.replace('_', ' ').title(),
+                                'change': price_data.get('change', 0)
+                            })
+                    except:
+                        continue
+            
+            # Fill remaining with fallback
             fallback_stocks = self.get_fallback_stocks()
             existing_symbols = {stock['symbol'] for stock in stocks}
             for fallback_stock in fallback_stocks:
@@ -109,8 +136,23 @@ class TradejiniClient:
                     stocks.append(fallback_stock)
             
             return stocks
+            
         except:
             return self.get_fallback_stocks()
+    
+    def get_live_price_quick(self, token):
+        """Quick single API call for testing"""
+        if not self.access_token:
+            return None
+        try:
+            url = f"{self.base_url}/api-gw/mkt-data/quote"
+            headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}:{self.access_token}"}
+            response = requests.get(url, headers=headers, params={"token": token}, timeout=3)
+            if response.status_code == 200:
+                return response.json()
+        except:
+            pass
+        return None
     
     def get_live_price(self, token):
         """Get live price for a specific token"""
