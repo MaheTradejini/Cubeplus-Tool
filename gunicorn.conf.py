@@ -1,7 +1,7 @@
 import os
 
-bind = f"0.0.0.0:{os.environ.get('PORT', 5000)}"
-workers = 2
+bind = f"0.0.0.0:{os.environ.get('PORT', 8000)}"
+workers = 1
 worker_class = "eventlet"
 worker_connections = 1000
 timeout = 30

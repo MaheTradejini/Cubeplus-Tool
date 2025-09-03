@@ -1,9 +1,0 @@
-name = "cubeplus-trading-simulator"
-main = "index.js"
-compatibility_date = "2024-01-01"
-
-[vars]
-TRADEJINI_APIKEY = "49ddd64cacba20b25376edb24c1d17ad"
-TRADEJINI_PASSWORD = "Gopal7463@"
-TRADEJINI_TWO_FA_TYPE = "TOTP"
-SECRET_KEY = "CLOUDFLARE_SECRET_KEY"
