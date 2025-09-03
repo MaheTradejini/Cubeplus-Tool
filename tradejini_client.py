@@ -47,11 +47,8 @@ class TradejiniClient:
             except:
                 pass
             
-            # TradJini v2 API endpoint and format
-            url = f"{self.base_url}/api-gw/oauth/individual-token-v2"
-            
-            # Bearer token format as per TradJini API
-            auth_header = f"Bearer {TRADEJINI_CONFIG['apikey']}"
+            # TradJini Individual Token API (Correct Format from Documentation)
+            url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
             
             import logging
             logging.basicConfig(level=logging.INFO)
@@ -60,23 +57,24 @@ class TradejiniClient:
             logger.info(f"URL: {url}")
             logger.info(f"Authenticating with TOTP: {current_totp}")
             logger.info(f"API Key: {TRADEJINI_CONFIG['apikey']}")
-            logger.info(f"Auth Header: {auth_header}")
             
-            # TradJini v2 API uses query parameters
-            params = {
-                "password": TRADEJINI_CONFIG['password'],
-                "two_fa": current_totp,
-                "two_fa_type": "TOTP"
-            }
-            
+            # Correct format as per TradJini API documentation
             headers = {
-                "Authorization": auth_header,
-                "Content-Type": "application/json"
+                "Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}",
+                "Content-Type": "application/x-www-form-urlencoded"
             }
             
-            logger.info(f"Params: {params}")
+            # Form data as specified in documentation
+            data = {
+                "password": TRADEJINI_CONFIG['password'],
+                "twoFa": current_totp,  # Note: 'twoFa' not 'two_fa'
+                "twoFaTyp": "totp"      # Note: 'twoFaTyp' not 'two_fa_type', lowercase 'totp'
+            }
             
-            response = requests.post(url, headers=headers, params=params, timeout=30)
+            logger.info(f"Headers: {headers}")
+            logger.info(f"Data: {data}")
+            
+            response = requests.post(url, headers=headers, data=data, timeout=30)
             logger.info(f"Auth response status: {response.status_code}")
             logger.info(f"Auth response: {response.text}")
             
