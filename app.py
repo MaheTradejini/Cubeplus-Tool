@@ -12,7 +12,7 @@ from config import TRADEJINI_CONFIG
 def get_current_totp():
     """Get current TOTP from database or environment"""
     try:
-        # First try database (production)
+        # First try database (admin updated TOTP)
         admin_user = User.query.filter_by(is_admin=True).first()
         if admin_user:
             credential = UserCredential.query.filter_by(
@@ -24,7 +24,7 @@ def get_current_totp():
     except:
         pass
     
-    # Fallback to environment variable
+    # Fallback to environment variable (initial setup)
     import os
     return os.environ.get('TRADEJINI_TWO_FA', '')
 from sqlalchemy import func
@@ -35,8 +35,9 @@ def create_app():
   from config import SECRET_KEY, DATABASE_URL
   import os
   
-  # Use PostgreSQL for production with TradJini integration
-  database_url = DATABASE_URL
+  # Use SQLite for production (PostgreSQL has Python 3.13 compatibility issues)
+  database_url = 'sqlite:///app.db'
+  app.logger.info('Using SQLite database for production')
   
   # Update TRADEJINI_CONFIG with current TOTP
   def update_tradejini_config():
@@ -44,8 +45,15 @@ def create_app():
       if current_totp:
           TRADEJINI_CONFIG['two_fa'] = current_totp
   
-  # Update config on app start
+  # Update config on app start and periodically
   update_tradejini_config()
+  
+  # Add route to refresh TOTP config
+  @app.route('/refresh-totp', methods=['POST'])
+  def refresh_totp():
+      """Internal endpoint to refresh TOTP config"""
+      update_tradejini_config()
+      return {'status': 'updated'}
   app.config['SECRET_KEY'] = SECRET_KEY
   app.config['SQLALCHEMY_DATABASE_URI'] = database_url
   app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -415,7 +423,10 @@ def create_app():
             
             db.session.commit()
         
-        flash('Global TOTP updated successfully! Active immediately.', 'success')
+        # Refresh TradJini config with new TOTP
+        update_tradejini_config()
+        
+        flash('Global TOTP updated successfully! Valid for 24 hours.', 'success')
         return redirect(url_for('admin_dashboard'))
     
     return render_template("admin_global_totp.html", form=form)
