@@ -38,26 +38,28 @@ class TokenCache:
     
     def get_fresh_token(self):
         try:
-            url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
-            headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}"}
-            data = {
-                'password': TRADEJINI_CONFIG['password'],
-                'twoFa': TRADEJINI_CONFIG['two_fa'],
-                'twoFaTyp': TRADEJINI_CONFIG['two_fa_type']
-            }
-            
-            response = requests.post(url, data=data, headers=headers)
-            if response.status_code == 200:
-                resp_data = response.json()
-                if 'access_token' in resp_data:
-                    self.cache_data = {
-                        'access_token': resp_data['access_token'],
-                        'timestamp': time.time()
-                    }
-                    self.save_cache()
-                    return resp_data['access_token']
-        except:
-            pass
+            from flask import current_app
+            with current_app.app_context():
+                url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
+                headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}"}
+                data = {
+                    'password': TRADEJINI_CONFIG['password'],
+                    'twoFa': TRADEJINI_CONFIG['two_fa'],
+                    'twoFaTyp': TRADEJINI_CONFIG['two_fa_type']
+                }
+                
+                response = requests.post(url, data=data, headers=headers)
+                if response.status_code == 200:
+                    resp_data = response.json()
+                    if 'access_token' in resp_data:
+                        self.cache_data = {
+                            'access_token': resp_data['access_token'],
+                            'timestamp': time.time()
+                        }
+                        self.save_cache()
+                        return resp_data['access_token']
+        except Exception as e:
+            print(f"Error getting access token: {e}")
         return None
     
     def get_access_token(self):
