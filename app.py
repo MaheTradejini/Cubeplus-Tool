@@ -105,7 +105,7 @@ def create_app():
   # Initialize live price streamer
   price_streamer = LivePriceStreamer(socketio)
   
-  # Add route to manually start streaming
+  # Add route to manually start streaming (real TradJini API)
   @app.route('/start-streaming', methods=['POST'])
   def start_streaming():
       try:
@@ -623,12 +623,7 @@ def create_app():
             
             db.session.commit()
         
-        # Skip TradJini verification for faster TOTP updates (network restrictions on Render)
-        flash(f'TOTP {form.totp_secret.data} saved successfully! Live streaming will use this code.', 'success')
-        return redirect(url_for('admin_dashboard'))
-        
-        # Original verification code (commented out for speed)
-        """
+        # Test TradJini authentication with new TOTP
         try:
             import requests
             url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
@@ -670,8 +665,8 @@ def create_app():
                 flash(f'TOTP authentication failed - status {response.status_code}', 'danger')
         except Exception as e:
             flash(f'TOTP verification failed: {str(e)}', 'danger')
-        """
-        # End of commented verification code
+        
+        return redirect(url_for('admin_dashboard'))
     
     return render_template("admin_global_totp.html", form=form)
 
