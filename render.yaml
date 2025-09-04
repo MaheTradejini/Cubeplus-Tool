@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: cubeplus-trading-app
+    env: docker
+    dockerfilePath: ./Dockerfile.render
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TRADEJINI_APIKEY
+        value: 49ddd64cacba20b25376edb24c1d17ad
+      - key: TRADEJINI_PASSWORD
+        value: Gopal7463@
+      - key: TRADEJINI_TWO_FA
+        value: "123456"
+      - key: TRADEJINI_TWO_FA_TYPE
+        value: TOTP
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cubeplus-trading-db
+          property: connectionString
+
+  - type: pserv
+    name: cubeplus-trading-db
+    env: postgresql
+    plan: starter
+    databaseName: cubeplus_trading
+    user: cubeplus_user

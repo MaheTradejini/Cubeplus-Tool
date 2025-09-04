@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: cubeplus_trading
+      POSTGRES_USER: cubeplus_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-CubePlus@2024}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cubeplus_user -d cubeplus_trading"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://cubeplus_user:${DB_PASSWORD:-CubePlus@2024}@db:5432/cubeplus_trading
+      - SECRET_KEY=${SECRET_KEY:-production-secret-key-change-this}
+      - TRADEJINI_APIKEY=${TRADEJINI_APIKEY}
+      - TRADEJINI_PASSWORD=${TRADEJINI_PASSWORD}
+      - TRADEJINI_TWO_FA=${TRADEJINI_TWO_FA:-123456}
+      - TRADEJINI_TWO_FA_TYPE=TOTP
+      - FLASK_ENV=production
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

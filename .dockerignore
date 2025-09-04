@@ -1,3 +1,8 @@
+# Git
+.git
+.gitignore
+
+# Python
 __pycache__
 *.pyc
 *.pyo
@@ -18,9 +23,34 @@ coverage.xml
 .mypy_cache
 .pytest_cache
 .hypothesis
-.venv
+
+# Virtual environments
 venv/
-.env
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Local development
+.env.local
 *.db
-*.sqlite3
+logs/
+ssl/
+
+# Documentation
+README.md
+docs/

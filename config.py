@@ -13,8 +13,8 @@ TRADEJINI_CONFIG = {
 }
 
 # Database and App Configuration
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:admin123@localhost:5432/cubeplus_tool_db')
-SECRET_KEY = os.getenv('SECRET_KEY', 'APPSECRECTKEY')
+DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///app.db')
+SECRET_KEY = os.getenv('SECRET_KEY', 'development-secret-key-change-in-production')
 
 # Exact Nifty 50 Stock tokens (50 stocks only)
 STOCK_TOKENS = {

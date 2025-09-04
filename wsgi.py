@@ -1,12 +1,16 @@
-import eventlet
-eventlet.monkey_patch()
-
-import os
+#!/usr/bin/env python3
+"""
+WSGI entry point for production deployment
+"""
 from app import create_app
+import os
 
+# Create Flask app and SocketIO instance
 app, socketio = create_app()
-application = app
 
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 8000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    # For development
+    socketio.run(app, debug=False, host='0.0.0.0', port=8000)
+else:
+    # For production with gunicorn
+    application = socketio
