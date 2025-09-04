@@ -83,11 +83,21 @@ def create_app():
   app.config['SECRET_KEY'] = SECRET_KEY
   app.config['SQLALCHEMY_DATABASE_URI'] = database_url
   app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-  app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-      'pool_pre_ping': True,
-      'pool_recycle': 300,
-      'connect_args': {'check_same_thread': False}
-  }
+  # Configure SQLAlchemy engine options based on database type
+  if 'postgresql' in database_url:
+      app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+          'pool_pre_ping': True,
+          'pool_recycle': 300,
+          'pool_size': 10,
+          'max_overflow': 20
+      }
+  else:
+      # SQLite configuration
+      app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+          'pool_pre_ping': True,
+          'pool_recycle': 300,
+          'connect_args': {'check_same_thread': False}
+      }
   bcrypt = Bcrypt()
   socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False, ping_timeout=60, ping_interval=25)
 
