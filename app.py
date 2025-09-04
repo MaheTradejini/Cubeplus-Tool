@@ -89,7 +89,7 @@ def create_app():
       'connect_args': {'check_same_thread': False}
   }
   bcrypt = Bcrypt()
-  socketio = SocketIO(app, cors_allowed_origins="*")
+  socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False, ping_timeout=60, ping_interval=25)
 
   db.init_app(app)
   bcrypt.init_app(app)
