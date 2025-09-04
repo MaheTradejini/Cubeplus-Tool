@@ -623,23 +623,14 @@ def create_app():
             
             db.session.commit()
         
-        # Test TradJini authentication with new TOTP
+        # Skip TradJini verification for faster TOTP updates (network restrictions on Render)
+        flash(f'TOTP {form.totp_secret.data} saved successfully! Live streaming will use this code.', 'success')
+        return redirect(url_for('admin_dashboard'))
+        
+        # Original verification code (commented out for speed)
+        """
         try:
-            # Direct API call with retry logic
             import requests
-            from requests.adapters import HTTPAdapter
-            from urllib3.util.retry import Retry
-            
-            session = requests.Session()
-            retry_strategy = Retry(
-                total=3,
-                backoff_factor=1,
-                status_forcelist=[429, 500, 502, 503, 504],
-            )
-            adapter = HTTPAdapter(max_retries=retry_strategy)
-            session.mount("http://", adapter)
-            session.mount("https://", adapter)
-            
             url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
             headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}"}
             data = {
@@ -648,7 +639,7 @@ def create_app():
                 "twoFaTyp": "totp"
             }
             
-            response = session.post(url, headers=headers, data=data, timeout=60)
+            response = requests.post(url, headers=headers, data=data, timeout=5)
             
             if response.status_code == 200:
                 resp_data = response.json()
@@ -677,13 +668,10 @@ def create_app():
                     flash('TOTP authentication failed - no access token received', 'danger')
             else:
                 flash(f'TOTP authentication failed - status {response.status_code}', 'danger')
-                
-        except requests.exceptions.RequestException as e:
-            flash(f'TradJini API connection failed. TOTP saved but verification skipped. Error: {str(e)}', 'warning')
-            # Still save the TOTP even if verification fails
         except Exception as e:
             flash(f'TOTP verification failed: {str(e)}', 'danger')
-        return redirect(url_for('admin_dashboard'))
+        """
+        # End of commented verification code
     
     return render_template("admin_global_totp.html", form=form)
 
