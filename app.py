@@ -87,11 +87,7 @@ def create_app():
   if 'postgresql' in database_url:
       app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
           'pool_pre_ping': True,
-          'pool_recycle': 300,
-          'pool_size': 1,
-          'max_overflow': 0,
-          'pool_timeout': 30,
-          'pool_reset_on_return': None
+          'pool_recycle': 300
       }
   else:
       # SQLite configuration
