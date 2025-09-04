@@ -85,9 +85,9 @@ def create_app():
   app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
   # Configure SQLAlchemy engine options based on database type
   if 'postgresql' in database_url:
+      from sqlalchemy.pool import NullPool
       app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-          'pool_pre_ping': True,
-          'pool_recycle': 300
+          'poolclass': NullPool
       }
   else:
       # SQLite configuration
