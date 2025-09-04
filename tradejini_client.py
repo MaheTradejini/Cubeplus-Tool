@@ -65,10 +65,11 @@ class TradejiniClient:
             }
             
             # Form data as specified in documentation
+            import urllib.parse
             data = {
                 "password": TRADEJINI_CONFIG['password'],
-                "twoFa": current_totp,  # Note: 'twoFa' not 'two_fa'
-                "twoFaTyp": "totp"      # Note: 'twoFaTyp' not 'two_fa_type', lowercase 'totp'
+                "twoFa": current_totp,
+                "twoFaTyp": "totp"
             }
             
             logger.info(f"Headers: {headers}")
@@ -78,16 +79,29 @@ class TradejiniClient:
             logger.info(f"Auth response status: {response.status_code}")
             logger.info(f"Auth response: {response.text}")
             
+            # Print full response for debugging
+            print(f"\n=== TradJini Auth Debug ===")
+            print(f"Status: {response.status_code}")
+            print(f"Response: {response.text}")
+            print(f"Headers: {dict(response.headers)}")
+            print(f"=========================\n")
+            
             if response.status_code == 200:
                 try:
                     data = response.json()
                     logger.info(f"Parsed response: {data}")
-                    if data.get('status') == 'success' or data.get('access_token'):
-                        self.access_token = data.get('access_token') or data.get('token')
+                    # TradJini returns access_token directly in response
+                    if 'access_token' in data:
+                        self.access_token = data['access_token']
                         logger.info(f"Authentication successful! Token: {self.access_token[:10]}****")
                         return True
-                except:
-                    logger.error("Failed to parse JSON response")
+                    elif data.get('status') == 'success':
+                        self.access_token = data.get('token')
+                        logger.info(f"Authentication successful! Token: {self.access_token[:10]}****")
+                        return True
+                except Exception as e:
+                    logger.error(f"Failed to parse JSON response: {e}")
+                    logger.error(f"Raw response: {response.text}")
             
             logger.error(f"Authentication failed: {response.text}")
             return False

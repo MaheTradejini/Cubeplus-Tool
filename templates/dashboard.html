@@ -20,8 +20,13 @@
 
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
   <h3>📈 Live Stock Prices (Top 50 NSE Stocks)</h3>
-  <div id="connection-status" style="padding: 5px 10px; border-radius: 15px; font-size: 12px; background: #28a745; color: white;">
-    🟢 LIVE
+  <div style="display: flex; gap: 15px; align-items: center;">
+    <input type="text" id="searchInput" placeholder="Search stocks..." 
+           style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 20px; width: 200px;" 
+           onkeyup="filterStocks()">
+    <div id="connection-status" style="padding: 5px 10px; border-radius: 15px; font-size: 12px; background: #28a745; color: white;">
+      🟢 LIVE
+    </div>
   </div>
 </div>
 
@@ -168,6 +173,31 @@
                 notification.parentNode.removeChild(notification);
             }
         }, 3000);
+    }
+    
+    // Stock search functionality
+    function filterStocks() {
+        const searchInput = document.getElementById('searchInput');
+        const filter = searchInput.value.toUpperCase();
+        const table = document.querySelector('table tbody');
+        const rows = table.getElementsByTagName('tr');
+        
+        for (let i = 0; i < rows.length; i++) {
+            const symbolCell = rows[i].getElementsByTagName('td')[0];
+            const nameCell = rows[i].getElementsByTagName('td')[1];
+            
+            if (symbolCell && nameCell) {
+                const symbolText = symbolCell.textContent || symbolCell.innerText;
+                const nameText = nameCell.textContent || nameCell.innerText;
+                
+                if (symbolText.toUpperCase().indexOf(filter) > -1 || 
+                    nameText.toUpperCase().indexOf(filter) > -1) {
+                    rows[i].style.display = '';
+                } else {
+                    rows[i].style.display = 'none';
+                }
+            }
+        }
     }
 </script>
 

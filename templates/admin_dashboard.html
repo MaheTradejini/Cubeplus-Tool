@@ -43,6 +43,7 @@
                 <a href="{{ url_for('admin_users') }}">Manage Users</a>
                 <a href="{{ url_for('admin_create_user') }}">Create User</a>
                 <a href="{{ url_for('admin_global_totp') }}">Global TOTP</a>
+                <button onclick="startStreaming()" class="btn btn-success">Start Live Prices</button>
                 <a href="{{ url_for('admin_logout') }}">Logout</a>
             </div>
         </div>
@@ -98,5 +99,18 @@
             </table>
         </div>
     </div>
+    
+    <script>
+    function startStreaming() {
+        fetch('/start-streaming', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+        })
+        .catch(error => {
+            alert('Error starting streaming: ' + error);
+        });
+    }
+    </script>
 </body>
 </html>
