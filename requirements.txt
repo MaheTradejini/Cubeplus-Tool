@@ -10,6 +10,7 @@ Flask-SocketIO==5.3.6
 requests==2.32.0
 websocket-client==1.6.1
 eventlet==0.33.3
+gevent==23.7.0
 email-validator==2.0.0
 python-socketio==5.8.0
 psycopg2-binary==2.9.7

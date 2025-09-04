@@ -27,5 +27,5 @@ EXPOSE $PORT
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$PORT/ || exit 1
 
-# Start application with dynamic port
-CMD gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT wsgi:application
+# Start application with configuration file
+CMD gunicorn -c gunicorn.conf.py wsgi:application
