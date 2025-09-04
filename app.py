@@ -89,7 +89,7 @@ def create_app():
       'connect_args': {'check_same_thread': False}
   }
   bcrypt = Bcrypt()
-  socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False, ping_timeout=60, ping_interval=25)
+  socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False, ping_timeout=60, ping_interval=25, async_mode='eventlet')
 
   db.init_app(app)
   bcrypt.init_app(app)
@@ -97,7 +97,7 @@ def create_app():
   # Initialize live price streamer
   price_streamer = LivePriceStreamer(socketio)
   
-  # Start live stream
+  # Start live stream only - no simulation
   try:
       if not price_streamer.start_live_stream():
           app.logger.warning("Failed to start live stream - check SDK installation")

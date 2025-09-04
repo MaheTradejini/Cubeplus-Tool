@@ -3,18 +3,14 @@ import os
 import time
 import threading
 
-# Add the streaming SDK path
-sdk_path = os.path.join(os.path.dirname(__file__), 'python-sdk', 'streaming')
-if sdk_path not in sys.path:
-    sys.path.append(sdk_path)
-
 # Import TradJini SDK with proper error handling
 try:
-    from nxtradstream import NxtradStream  # type: ignore
+    from nxtradstream import NxtradStream
     SDK_AVAILABLE = True
+    print("TradJini SDK loaded successfully")
 except ImportError as e:
     SDK_AVAILABLE = False
-    NxtradStream = None  # type: ignore
+    NxtradStream = None
     print(f"TradJini SDK not available: {e}")
 
 from config import TRADEJINI_CONFIG, STOCK_TOKENS
@@ -40,16 +36,19 @@ class LivePriceStreamer:
     def get_access_token(self):
         """Get access token from database (stored by admin)"""
         try:
-            from models import User, UserCredential
-            admin_user = User.query.filter_by(is_admin=True).first()
-            if admin_user:
-                credential = UserCredential.query.filter_by(
-                    user_id=admin_user.id,
-                    credential_name='ACCESS_TOKEN'
-                ).first()
-                if credential and not credential.credential_value.startswith('MOCK_'):
-                    self.access_token = credential.credential_value
-                    return True
+            from flask import current_app
+            with current_app.app_context():
+                from models import User, UserCredential
+                admin_user = User.query.filter_by(is_admin=True).first()
+                if admin_user:
+                    credential = UserCredential.query.filter_by(
+                        user_id=admin_user.id,
+                        credential_name='ACCESS_TOKEN'
+                    ).first()
+                    if credential and not credential.credential_value.startswith('MOCK_'):
+                        self.access_token = credential.credential_value
+                        print(f"Using access token: {self.access_token[:10]}****")
+                        return True
         except Exception as e:
             print(f"Error getting access token: {e}")
         return False
@@ -160,6 +159,46 @@ class LivePriceStreamer:
             'total_stocks': len(STOCK_TOKENS),
             'sdk_available': SDK_AVAILABLE
         }
+    
+    def start_price_simulation(self):
+        """Start simulated price updates when live stream unavailable"""
+        import random
+        
+        def simulate_prices():
+            while True:
+                try:
+                    # Update prices for random stocks every 2-5 seconds
+                    symbols = list(STOCK_TOKENS.keys())
+                    symbol = random.choice(symbols)
+                    
+                    # Get current price or generate base price
+                    current_price = live_prices.get(symbol, 500 + random.randint(0, 2000))
+                    
+                    # Generate realistic price movement (-2% to +2%)
+                    change_percent = random.uniform(-0.02, 0.02)
+                    new_price = current_price * (1 + change_percent)
+                    new_price = max(1.0, round(new_price, 2))  # Minimum ₹1
+                    
+                    live_prices[symbol] = new_price
+                    
+                    # Emit price update via WebSocket
+                    self.socketio.emit('price_update', {
+                        'symbol': symbol,
+                        'price': new_price
+                    })
+                    
+                    # Random delay between updates
+                    time.sleep(random.uniform(2, 5))
+                    
+                except Exception as e:
+                    print(f"Price simulation error: {e}")
+                    time.sleep(5)
+        
+        # Start simulation in background thread
+        sim_thread = threading.Thread(target=simulate_prices, daemon=True)
+        sim_thread.start()
+        self.is_connected = True
+        print("Started price simulation - prices will fluctuate every 2-5 seconds")
     
     def stop_stream(self):
         """Stop the live stream"""
