@@ -88,9 +88,10 @@ def create_app():
       app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
           'pool_pre_ping': True,
           'pool_recycle': 300,
-          'pool_size': 5,
-          'max_overflow': 10,
-          'pool_timeout': 30
+          'pool_size': 1,
+          'max_overflow': 0,
+          'pool_timeout': 30,
+          'pool_reset_on_return': None
       }
   else:
       # SQLite configuration
