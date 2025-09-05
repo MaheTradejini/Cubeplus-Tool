@@ -13,6 +13,9 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
 
+# Add nxtradstream package
+RUN pip install --no-cache-dir nxtradstream
+
 # Copy application code
 COPY . .
 
@@ -24,4 +27,4 @@ USER appuser
 EXPOSE 8000
 
 # Start application
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "--timeout", "120", "wsgi:application"]
+CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 wsgi:application
