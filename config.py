@@ -1,15 +1,16 @@
 import os
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    # Load environment variables from .env file (local development)
+    load_dotenv()
+except ImportError:
+    # In production, environment variables are set directly
+    pass
 
-# Load environment variables
-load_dotenv()
-
-# TradJini API Configuration - loaded from environment variables
+# TradJini API Configuration - only API key needed for direct token flow
 TRADEJINI_CONFIG = {
     'apikey': os.getenv('TRADEJINI_APIKEY', ''),
-    'password': os.getenv('TRADEJINI_PASSWORD', ''),
-    'two_fa': os.getenv('TRADEJINI_TWO_FA', ''),
-    'two_fa_type': os.getenv('TRADEJINI_TWO_FA_TYPE', 'TOTP')
+    'access_token': None  # Will be set via admin panel
 }
 
 # Database and App Configuration
