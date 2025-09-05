@@ -29,5 +29,5 @@ EXPOSE 8000
 # Make startup script executable
 RUN chmod +x start.sh
 
-# Start application
-CMD ["./start.sh"]
+# Start application (temporary test)
+CMD ["python", "health.py"]
