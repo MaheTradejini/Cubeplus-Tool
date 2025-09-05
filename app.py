@@ -623,8 +623,13 @@ def create_app():
             
             db.session.commit()
         
-        # Test TradJini authentication with new TOTP
-        try:
+        # Save TOTP first for immediate response
+        flash(f'TOTP {form.totp_secret.data} saved successfully!', 'success')
+        
+        # Test TradJini authentication in background (non-blocking)
+        import threading
+        def verify_totp_async():
+            try:
             import requests
             import socket
             
@@ -644,7 +649,7 @@ def create_app():
                 "twoFaTyp": "totp"
             }
             
-            response = requests.post(url, headers=headers, data=data, timeout=10, verify=False)
+            response = requests.post(url, headers=headers, data=data, timeout=3, verify=False)
             
             # Restore original DNS resolution
             socket.getaddrinfo = original_getaddrinfo
@@ -676,8 +681,12 @@ def create_app():
                     flash('TOTP authentication failed - no access token received', 'danger')
             else:
                 flash(f'TOTP authentication failed - status {response.status_code}', 'danger')
-        except Exception as e:
-            flash(f'TOTP verification failed: {str(e)}', 'danger')
+            except Exception as e:
+                print(f'Background TOTP verification failed: {str(e)}')
+        
+        # Start background verification
+        thread = threading.Thread(target=verify_totp_async, daemon=True)
+        thread.start()
         
         return redirect(url_for('admin_dashboard'))
     
