@@ -13,9 +13,6 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
 
-# Add nxtradstream package
-RUN pip install --no-cache-dir nxtradstream
-
 # Copy application code
 COPY . .
 
