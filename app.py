@@ -9,24 +9,25 @@ from tradejini_client import TradejiniClient
 from live_price_stream import LivePriceStreamer
 from config import TRADEJINI_CONFIG
 
-def get_current_totp():
-    """Get current TOTP from database or environment"""
+def get_current_access_token():
+    """Get current access token from database if valid (24hrs)"""
     try:
-        # First try database (admin updated TOTP)
+        from datetime import datetime, timedelta
         admin_user = User.query.filter_by(is_admin=True).first()
         if admin_user:
             credential = UserCredential.query.filter_by(
                 user_id=admin_user.id,
-                credential_name='GLOBAL_TOTP'
+                credential_name='ACCESS_TOKEN'
             ).first()
             if credential:
-                return credential.credential_value
-    except:
-        pass
-    
-    # Fallback to environment variable (initial setup)
-    import os
-    return os.environ.get('TRADEJINI_TWO_FA', '')
+                # Check if token is still valid (24 hours)
+                if credential.updated_at and credential.updated_at > datetime.utcnow() - timedelta(hours=24):
+                    return credential.credential_value
+                else:
+                    print("Access token expired, need new TOTP")
+    except Exception as e:
+        print(f"Error getting access token: {e}")
+    return None
 from sqlalchemy import func
 
 
@@ -38,14 +39,17 @@ def create_app():
   # Local SQLite database
   database_url = DATABASE_URL
   
-  # Update TRADEJINI_CONFIG with current TOTP
-  def update_tradejini_config():
-      current_totp = get_current_totp()
-      if current_totp:
-          TRADEJINI_CONFIG['two_fa'] = current_totp
+  # Check for valid access token on app start
+  def check_access_token():
+      token = get_current_access_token()
+      if token:
+          print(f"Valid access token found: {token[:10]}****")
+      else:
+          print("No valid access token found, need TOTP to generate new one")
   
-  # Update config on app start and periodically
-  update_tradejini_config()
+  # Check token on app start
+  with app.app_context():
+      check_access_token()
   
   # Add route to refresh TOTP config
   @app.route('/refresh-totp', methods=['POST'])
@@ -595,104 +599,69 @@ def create_app():
     form = GlobalTOTPForm()
     
     if form.validate_on_submit():
-        # Store TOTP in database for production persistence
-        import os
-        from models import db
-        
-        # Update current session
-        os.environ['TRADEJINI_TWO_FA'] = form.totp_secret.data
-        
-        # Store in database for persistence across restarts
+        # Generate access token directly from TOTP (don't store TOTP)
         admin_user = User.query.filter_by(is_admin=True).first()
-        if admin_user:
-            # Store TOTP in admin user record or create system config
-            credential = UserCredential.query.filter_by(
-                user_id=admin_user.id, 
-                credential_name='GLOBAL_TOTP'
-            ).first()
-            
-            if credential:
-                credential.credential_value = form.totp_secret.data
-            else:
-                credential = UserCredential(
-                    user_id=admin_user.id,
-                    credential_name='GLOBAL_TOTP',
-                    credential_value=form.totp_secret.data
-                )
-                db.session.add(credential)
-            
-            db.session.commit()
+        totp_value = form.totp_secret.data
         
-        # Save TOTP first for immediate response
-        flash(f'TOTP {form.totp_secret.data} saved successfully!', 'success')
+        flash(f'Generating access token with TOTP {totp_value}...', 'info')
         
-        # Test TradJini authentication in background (non-blocking)
-        import threading
-        totp_value = form.totp_secret.data  # Capture TOTP value before thread
-        
-        def verify_totp_async(totp_code):
-            print(f"Background TOTP verification started for: {totp_code}")
-            with app.app_context():
-                try:
-                    import requests
-                    import socket
+        # Generate access token immediately (synchronous)
+        try:
+            import requests
             
-                    # Monkey patch DNS resolution for api.tradejini.com
-                    original_getaddrinfo = socket.getaddrinfo
-                    def custom_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-                        if host == 'api.tradejini.com':
-                            return original_getaddrinfo('13.127.185.58', port, family, type, proto, flags)
-                        return original_getaddrinfo(host, port, family, type, proto, flags)
-                    socket.getaddrinfo = custom_getaddrinfo
+            # Use IP directly to bypass DNS issues
+            url = "https://13.127.185.58/v2/api-gw/oauth/individual-token-v2"
+            headers = {
+                "Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}",
+                "Host": "api.tradejini.com"
+            }
+            data = {
+                "password": TRADEJINI_CONFIG['password'],
+                "twoFa": totp_value,
+                "twoFaTyp": "totp"
+            }
+            
+            print(f"Making immediate API call with TOTP: {totp_value}")
+            response = requests.post(url, headers=headers, data=data, timeout=10, verify=False)
+            print(f"API Response Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                resp_data = response.json()
+                if 'access_token' in resp_data:
+                    access_token = resp_data['access_token']
                     
-                    url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
-                    headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}"}
-                    data = {
-                        "password": TRADEJINI_CONFIG['password'],
-                        "twoFa": totp_code,
-                        "twoFaTyp": "totp"
-                    }
+                    # Store access token with timestamp for 24hr validity
+                    from datetime import datetime, timedelta
+                    expires_at = datetime.utcnow() + timedelta(hours=24)
                     
-                    print(f"Making API call to TradJini with TOTP: {totp_code}")
-                    response = requests.post(url, headers=headers, data=data, timeout=3, verify=False)
-                    print(f"API Response Status: {response.status_code}")
+                    token_credential = UserCredential.query.filter_by(
+                        user_id=admin_user.id,
+                        credential_name='ACCESS_TOKEN'
+                    ).first()
                     
-                    # Restore original DNS resolution
-                    socket.getaddrinfo = original_getaddrinfo
-                    
-                    if response.status_code == 200:
-                        resp_data = response.json()
-                        if 'access_token' in resp_data:
-                            access_token = resp_data['access_token']
-                            
-                            # Store real access token in database
-                            token_credential = UserCredential.query.filter_by(
-                                user_id=admin_user.id,
-                                credential_name='ACCESS_TOKEN'
-                            ).first()
-                            
-                            if token_credential:
-                                token_credential.credential_value = access_token
-                            else:
-                                token_credential = UserCredential(
-                                    user_id=admin_user.id,
-                                    credential_name='ACCESS_TOKEN',
-                                    credential_value=access_token
-                                )
-                                db.session.add(token_credential)
-                            
-                            db.session.commit()
-                            print(f'TOTP verified! Access token stored: {access_token[:10]}****')
-                        else:
-                            print('TOTP authentication failed - no access token received')
+                    if token_credential:
+                        token_credential.credential_value = access_token
+                        token_credential.updated_at = datetime.utcnow()
                     else:
-                        print(f'TOTP authentication failed - status {response.status_code}')
-                except Exception as e:
-                    print(f'Background TOTP verification failed: {str(e)}')
-        
-        # Start background verification with TOTP value
-        thread = threading.Thread(target=verify_totp_async, args=(totp_value,), daemon=True)
-        thread.start()
+                        token_credential = UserCredential(
+                            user_id=admin_user.id,
+                            credential_name='ACCESS_TOKEN',
+                            credential_value=access_token
+                        )
+                        db.session.add(token_credential)
+                    
+                    db.session.commit()
+                    flash(f'Access token generated successfully! Valid for 24 hours. Token: {access_token[:10]}****', 'success')
+                    print(f'Access token stored: {access_token[:10]}****')
+                else:
+                    flash('TOTP authentication failed - no access token received', 'danger')
+            else:
+                flash(f'TOTP authentication failed - status {response.status_code}', 'danger')
+                print(f"API Response Text: {response.text}")
+                
+        except Exception as e:
+            flash(f'TOTP verification failed: {str(e)}', 'danger')
+            print(f'TOTP verification failed: {str(e)}')
         
         return redirect(url_for('admin_dashboard'))
     
