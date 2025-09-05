@@ -195,31 +195,40 @@ def create_app():
         flash('Admin users cannot access client dashboard', 'danger')
         return redirect(url_for('admin_login'))
     
-    # Get stock data from TradJini API or fallback to mock data
-    try:
-        client = TradejiniClient()
-        stocks = client.get_stock_list()
-    except Exception as e:
-        app.logger.warning(f"TradJini API failed: {e}, using mock data")
-        # Fallback to mock stock data with live-like prices
-        from config import STOCK_TOKENS
-        import random
-        import time
-        
-        stocks = []
-        base_time = int(time.time())
-        for i, (symbol, token) in enumerate(STOCK_TOKENS.items()):
-            # Generate realistic fluctuating prices
-            base_price = 500 + (i * 100)  # Different base prices
-            fluctuation = random.uniform(-0.05, 0.05)  # ±5% fluctuation
+    # Get stock data with live prices from streaming
+    from config import STOCK_TOKENS
+    import random
+    
+    stocks = []
+    for i, (symbol, token) in enumerate(STOCK_TOKENS.items()):
+        # Try to get live price from streamer first
+        try:
+            live_price = price_streamer.get_current_price(symbol)
+            if live_price > 0:
+                # Use live price
+                current_price = live_price
+                # Calculate change from base price (for demo)
+                base_price = 500 + (i * 100)
+                change_percent = ((current_price - base_price) / base_price) * 100
+            else:
+                # Fallback to realistic mock prices
+                base_price = 500 + (i * 100)
+                fluctuation = random.uniform(-0.02, 0.02)  # ±2% fluctuation
+                current_price = base_price * (1 + fluctuation)
+                change_percent = fluctuation * 100
+        except:
+            # Fallback to mock prices
+            base_price = 500 + (i * 100)
+            fluctuation = random.uniform(-0.02, 0.02)
             current_price = base_price * (1 + fluctuation)
-            
-            stocks.append({
-                'symbol': symbol,
-                'name': symbol.replace('_', ' ').title(),
-                'price': round(current_price, 2),
-                'change': round(fluctuation * 100, 2)
-            })
+            change_percent = fluctuation * 100
+        
+        stocks.append({
+            'symbol': symbol,
+            'name': symbol.replace('_', ' ').title(),
+            'price': round(current_price, 2),
+            'change': round(change_percent, 2)
+        })
     
     return render_template("dashboard.html", stocks=stocks, balance=user.balance)
 
@@ -675,6 +684,9 @@ def create_app():
             db.session.commit()
             flash(f'Access token saved successfully! Token: {access_token[:10]}****', 'success')
             print(f'Direct access token stored: {access_token[:10]}****')
+        
+        # Update TRADEJINI_CONFIG with the new token for immediate use
+        TRADEJINI_CONFIG['access_token'] = access_token
         
         return redirect(url_for('admin_dashboard'))
     
