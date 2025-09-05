@@ -626,6 +626,16 @@ def create_app():
         # Test TradJini authentication with new TOTP
         try:
             import requests
+            import socket
+            
+            # Monkey patch DNS resolution for api.tradejini.com
+            original_getaddrinfo = socket.getaddrinfo
+            def custom_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+                if host == 'api.tradejini.com':
+                    return original_getaddrinfo('13.127.185.58', port, family, type, proto, flags)
+                return original_getaddrinfo(host, port, family, type, proto, flags)
+            socket.getaddrinfo = custom_getaddrinfo
+            
             url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
             headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}"}
             data = {
@@ -634,7 +644,10 @@ def create_app():
                 "twoFaTyp": "totp"
             }
             
-            response = requests.post(url, headers=headers, data=data, timeout=5)
+            response = requests.post(url, headers=headers, data=data, timeout=10, verify=False)
+            
+            # Restore original DNS resolution
+            socket.getaddrinfo = original_getaddrinfo
             
             if response.status_code == 200:
                 resp_data = response.json()
