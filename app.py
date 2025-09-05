@@ -6,8 +6,20 @@ from admin_forms import CreateUserForm, EditUserForm, DirectTokenForm
 from models import db, User, Transaction, UserCredential, ShortPosition, ClosedPosition
 from flask_bcrypt import Bcrypt
 from tradejini_client import TradejiniClient
-from live_price_stream import LivePriceStreamer
-from config import TRADEJINI_CONFIG
+try:
+    from live_price_stream import LivePriceStreamer
+except ImportError as e:
+    print(f"Warning: Could not import LivePriceStreamer: {e}")
+    LivePriceStreamer = None
+except Exception as e:
+    print(f"Error importing LivePriceStreamer: {e}")
+    LivePriceStreamer = None
+
+try:
+    from config import TRADEJINI_CONFIG
+except ImportError as e:
+    print(f"Warning: Could not import TRADEJINI_CONFIG: {e}")
+    TRADEJINI_CONFIG = {'apikey': 'default'}
 
 def get_current_access_token():
     """Get current access token from database if valid (24hrs)"""
@@ -108,17 +120,21 @@ def create_app():
   bcrypt.init_app(app)
   
   # Initialize live price streamer
-  price_streamer = LivePriceStreamer(socketio)
+  if LivePriceStreamer:
+      price_streamer = LivePriceStreamer(socketio)
+  else:
+      price_streamer = None
+      print("Warning: LivePriceStreamer not available")
   
   # Add route to manually start streaming (try all methods)
   @app.route('/start-streaming', methods=['POST'])
   def start_streaming():
       try:
           # Try all available methods for live prices
-          if price_streamer.start_live_stream():
+          if price_streamer and price_streamer.start_live_stream():
               return {'status': 'success', 'message': 'Live streaming started'}
           else:
-              return {'status': 'failed', 'message': 'Failed to start streaming'}
+              return {'status': 'failed', 'message': 'Price streamer not available or failed to start'}
       except Exception as e:
           return {'status': 'error', 'message': str(e)}
 

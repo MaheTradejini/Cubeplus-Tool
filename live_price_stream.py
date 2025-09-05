@@ -4,8 +4,15 @@ import time
 import threading
 import requests
 
-# Import TradJini SDK
+# Import TradJini SDK from python-sdk folder
 try:
+    import sys
+    import os
+    # Add python-sdk to path
+    sdk_path = os.path.join(os.path.dirname(__file__), 'python-sdk', 'streaming')
+    if sdk_path not in sys.path:
+        sys.path.insert(0, sdk_path)
+    
     from nxtradstream import NxtradStream
     SDK_AVAILABLE = True
     print("TradJini SDK loaded successfully")
@@ -13,6 +20,10 @@ except ImportError as e:
     SDK_AVAILABLE = False
     NxtradStream = None
     print(f"TradJini SDK not available: {e}")
+except Exception as e:
+    SDK_AVAILABLE = False
+    NxtradStream = None
+    print(f"Error loading TradJini SDK: {e}")
 
 from config import TRADEJINI_CONFIG, STOCK_TOKENS
 

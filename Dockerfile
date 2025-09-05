@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
 # Copy application code
 COPY . .
 
+# Ensure python-sdk is accessible
+ENV PYTHONPATH="${PYTHONPATH}:/app/python-sdk/streaming"
+
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
