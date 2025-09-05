@@ -388,7 +388,7 @@ def create_app():
     user_id = session['user_id']
     transactions = Transaction.query.filter_by(user_id=user_id).order_by(Transaction.timestamp.desc()).all()
     
-    # Calculate holdings with P&L (including new transaction types)
+    # Calculate holdings with proper P&L calculation
     holdings = {}
     for t in Transaction.query.filter_by(user_id=user_id).all():
         if t.symbol not in holdings:
@@ -416,15 +416,16 @@ def create_app():
             except:
                 current_price = data['buy_value'] / data['buy_qty'] if data['buy_qty'] > 0 else 0
             
-            # Use current price for both invested and current value
-            invested_amount = net_qty * current_price
+            # Calculate proper P&L using average buy price
+            avg_buy_price = data['buy_value'] / data['buy_qty'] if data['buy_qty'] > 0 else current_price
+            invested_amount = net_qty * avg_buy_price
             current_value = net_qty * current_price
-            pnl = 0  # No P&L since both use current price
-            pnl_percent = 0
+            pnl = current_value - invested_amount
+            pnl_percent = (pnl / invested_amount * 100) if invested_amount > 0 else 0
             
             current_holdings[symbol] = {
                 'quantity': net_qty,
-                'avg_price': current_price,  # Show current price as avg price
+                'avg_price': avg_buy_price,  # Show actual average buy price
                 'current_price': current_price,
                 'invested': invested_amount,
                 'current_value': current_value,

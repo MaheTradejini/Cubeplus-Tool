@@ -53,6 +53,7 @@
         <th style="padding: 15px; text-align: right;">Invested</th>
         <th style="padding: 15px; text-align: right;">Current Value</th>
         <th style="padding: 15px; text-align: right;">P&L</th>
+        <th style="padding: 15px; text-align: center;">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -67,6 +68,12 @@
         <td style="padding: 15px; text-align: right; font-weight: bold; color: {{ '#28a745' if data['pnl'] >= 0 else '#dc3545' }};" class="pnl">
           {{ '+' if data['pnl'] >= 0 else '' }}₹{{ '%.2f'|format(data['pnl']) }}<br>
           <small>({{ '+' if data['pnl_percent'] >= 0 else '' }}{{ '%.2f'|format(data['pnl_percent']) }}%)</small>
+        </td>
+        <td style="padding: 15px; text-align: center;">
+          <div style="display: flex; gap: 5px; align-items: center; justify-content: center;">
+            <input type="number" min="1" max="{{ data['quantity'] }}" value="1" style="width: 50px; padding: 3px; border: 1px solid #ddd; border-radius: 3px;" class="sell-qty-{{ symbol }}">
+            <button onclick="instantSell('{{ symbol }}', {{ data['current_price'] }})" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">SELL</button>
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -93,6 +100,7 @@
         <th style="padding: 15px; text-align: right;">Avg Sell Price</th>
         <th style="padding: 15px; text-align: right;">Current Price</th>
         <th style="padding: 15px; text-align: right;">Unrealized P&L</th>
+        <th style="padding: 15px; text-align: center;">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -104,6 +112,70 @@
         <td style="padding: 15px; text-align: right; font-weight: bold; color: #28a745;" class="short-live-price" data-symbol="{{ symbol }}">₹{{ '%.2f'|format(data['current_price']) }}</td>
         <td style="padding: 15px; text-align: right; font-weight: bold; color: {{ '#28a745' if data['unrealized_pnl'] >= 0 else '#dc3545' }};" class="short-pnl">
           {{ '+' if data['unrealized_pnl'] >= 0 else '' }}₹{{ '%.2f'|format(data['unrealized_pnl']) }}
+        </td>
+        <td style="padding: 15px; text-align: center;">
+          <div style="display: flex; gap: 5px; align-items: center; justify-content: center;">
+            <input type="number" min="1" max="{{ data['quantity'] }}" value="1" style="width: 50px; padding: 3px; border: 1px solid #ddd; border-radius: 3px;" class="cover-qty-{{ symbol }}">
+            <button onclick="instantCover('{{ symbol }}', {{ data['current_price'] }})" style="background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">COVER</button>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Order Book -->
+<h3 style="margin-bottom: 20px;">📈 Order Book</h3>
+<div style="background: white; border-radius: 10px; padding: 20px; margin-bottom: 30px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+    <div>
+      <h4 style="color: #28a745; margin-bottom: 15px;">📈 Buy Orders</h4>
+      <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; color: #666;">
+        No active buy orders
+      </div>
+    </div>
+    <div>
+      <h4 style="color: #dc3545; margin-bottom: 15px;">📉 Sell Orders</h4>
+      <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; color: #666;">
+        No active sell orders
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Closed Positions P&L -->
+{% if closed_positions %}
+<h3 style="margin-bottom: 20px;">🎯 Closed Positions</h3>
+<div style="overflow-x: auto; margin-bottom: 40px;">
+  <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+    <thead style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%); color: white;">
+      <tr>
+        <th style="padding: 15px; text-align: left;">Date</th>
+        <th style="padding: 15px; text-align: left;">Symbol</th>
+        <th style="padding: 15px; text-align: center;">Type</th>
+        <th style="padding: 15px; text-align: right;">Quantity</th>
+        <th style="padding: 15px; text-align: right;">Buy Price</th>
+        <th style="padding: 15px; text-align: right;">Sell Price</th>
+        <th style="padding: 15px; text-align: right;">P&L</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for position in closed_positions %}
+      <tr style="border-bottom: 1px solid #eee;">
+        <td style="padding: 15px; color: #666;">{{ position.closed_at.strftime('%d %b %Y') }}</td>
+        <td style="padding: 15px; font-weight: bold; color: #333;">{{ position.symbol }}</td>
+        <td style="padding: 15px; text-align: center;">
+          <span style="background: {{ '#6c757d' if position.position_type == 'SHORT' else '#007bff' }}; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px;">
+            {{ position.position_type }}
+          </span>
+        </td>
+        <td style="padding: 15px; text-align: right; font-weight: bold;">{{ position.quantity }}</td>
+        <td style="padding: 15px; text-align: right;">₹{{ '%.2f'|format(position.buy_price) }}</td>
+        <td style="padding: 15px; text-align: right;">₹{{ '%.2f'|format(position.sell_price) }}</td>
+        <td style="padding: 15px; text-align: right; font-weight: bold; color: {{ '#28a745' if position.pnl >= 0 else '#dc3545' }};">
+          {{ '+' if position.pnl >= 0 else '' }}₹{{ '%.2f'|format(position.pnl) }}
         </td>
       </tr>
       {% endfor %}
@@ -130,7 +202,7 @@
     <tbody>
       {% for transaction in transactions %}
       <tr style="border-bottom: 1px solid #eee;">
-        <td style="padding: 15px; color: #666;">{{ (transaction.timestamp + timedelta(hours=5, minutes=30)).strftime('%d %b %Y, %I:%M %p') }}</td>
+        <td style="padding: 15px; color: #666;">{{ transaction.timestamp.strftime('%d %b %Y, %I:%M %p IST') }}</td>
         <td style="padding: 15px; font-weight: bold; color: #333;">{{ transaction.symbol }}</td>
         <td style="padding: 15px; text-align: center;">
           {% if transaction.type == 'BUY' %}
@@ -197,6 +269,88 @@
         // Update portfolio summary
         updatePortfolioSummary();
     });
+    
+    // Instant sell function
+    function instantSell(symbol, currentPrice) {
+        const quantity = document.querySelector(`.sell-qty-${symbol}`).value;
+        if (!quantity || quantity <= 0) {
+            alert('Please enter a valid quantity');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('symbol', symbol);
+        formData.append('price', currentPrice);
+        formData.append('quantity', quantity);
+        
+        fetch('/sell', {
+            method: 'POST',
+            body: formData
+        })
+        .then(() => {
+            showNotification('SELL', symbol, currentPrice, quantity);
+            setTimeout(() => location.reload(), 1000);
+        })
+        .catch(error => {
+            console.error('Sell error:', error);
+            alert('Error processing sell order');
+        });
+    }
+    
+    // Instant cover function
+    function instantCover(symbol, currentPrice) {
+        const quantity = document.querySelector(`.cover-qty-${symbol}`).value;
+        if (!quantity || quantity <= 0) {
+            alert('Please enter a valid quantity');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('symbol', symbol);
+        formData.append('price', currentPrice);
+        formData.append('quantity', quantity);
+        
+        fetch('/buy', {
+            method: 'POST',
+            body: formData
+        })
+        .then(() => {
+            showNotification('COVER', symbol, currentPrice, quantity);
+            setTimeout(() => location.reload(), 1000);
+        })
+        .catch(error => {
+            console.error('Cover error:', error);
+            alert('Error processing cover order');
+        });
+    }
+    
+    // Notification system
+    function showNotification(action, symbol, price, quantity) {
+        const notification = document.createElement('div');
+        notification.style.position = 'fixed';
+        notification.style.bottom = '20px';
+        notification.style.right = '20px';
+        notification.style.background = action === 'SELL' ? '#dc3545' : '#28a745';
+        notification.style.color = 'white';
+        notification.style.padding = '15px 20px';
+        notification.style.borderRadius = '8px';
+        notification.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        notification.style.zIndex = '9999';
+        notification.style.fontWeight = 'bold';
+        notification.style.maxWidth = '300px';
+        
+        const emoji = action === 'SELL' ? '💰' : action === 'COVER' ? '🔄' : '🛍';
+        const total = (parseFloat(price) * parseInt(quantity)).toFixed(2);
+        notification.innerHTML = `${emoji} ${action}<br>${quantity} × ${symbol}<br>₹${price} each<br>Total: ₹${total}`;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 3000);
+    }
     
     function updateRowPnL(symbol, currentPrice) {
         // Update long position P&L
