@@ -47,9 +47,7 @@ def create_app():
       else:
           print("No valid access token found, need TOTP to generate new one")
   
-  # Check token on app start
-  with app.app_context():
-      check_access_token()
+  # Will check token after db init
   
   # Add route to refresh TOTP config
   @app.route('/refresh-totp', methods=['POST'])
@@ -134,6 +132,9 @@ def create_app():
         admin.set_password('admin123')
         db.session.add(admin)
         db.session.commit()
+    
+    # Check for valid access token after db is ready
+    check_access_token()
 
 
   def login_required(f):
@@ -609,11 +610,10 @@ def create_app():
         try:
             import requests
             
-            # Use IP directly to bypass DNS issues
-            url = "https://13.127.185.58/v2/api-gw/oauth/individual-token-v2"
+            # Use domain name with longer timeout
+            url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
             headers = {
-                "Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}",
-                "Host": "api.tradejini.com"
+                "Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}"
             }
             data = {
                 "password": TRADEJINI_CONFIG['password'],
@@ -622,7 +622,7 @@ def create_app():
             }
             
             print(f"Making immediate API call with TOTP: {totp_value}")
-            response = requests.post(url, headers=headers, data=data, timeout=10, verify=False)
+            response = requests.post(url, headers=headers, data=data, timeout=30, verify=False)
             print(f"API Response Status: {response.status_code}")
             
             if response.status_code == 200:
