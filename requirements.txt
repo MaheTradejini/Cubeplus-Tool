@@ -1,17 +1,8 @@
 Flask==2.3.3
-Werkzeug==2.3.7
-python-dotenv==1.0.0
 Flask-SQLAlchemy==3.0.5
-Flask-Login==0.6.3
 Flask-WTF==1.1.1
-WTForms==3.0.1
 Flask-Bcrypt==1.0.1
 Flask-SocketIO==5.3.6
 requests==2.32.0
-websocket-client==1.6.1
-eventlet==0.33.3
-gevent==23.7.0
-email-validator==2.0.0
-python-socketio==5.8.0
 psycopg2-binary==2.9.7
 gunicorn==21.2.0

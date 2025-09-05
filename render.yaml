@@ -2,7 +2,7 @@ services:
   - type: web
     name: cubeplus-trading-app
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
     startCommand: gunicorn --worker-class sync --workers 1 --threads 2 --bind 0.0.0.0:$PORT wsgi:application
     envVars:
       - key: FLASK_ENV
@@ -11,12 +11,7 @@ services:
         value: CubePlus-Trading-Secret-Key-2024-Render-Production-Secure
       - key: TRADEJINI_APIKEY
         value: 49ddd64cacba20b25376edb24c1d17ad
-      - key: TRADEJINI_PASSWORD
-        value: Gopal7463@
-      - key: TRADEJINI_TWO_FA
-        value: "123456"
-      - key: TRADEJINI_TWO_FA_TYPE
-        value: TOTP
+
       - key: DATABASE_URL
         value: postgresql://cubeplus_trading_db_user:tukzjRQzNBwDFEj0KpoPokqalovPya40@dpg-d2sqcmndiees73973ob0-a/cubeplus_trading_db
 
