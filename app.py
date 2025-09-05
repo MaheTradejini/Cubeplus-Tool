@@ -629,60 +629,61 @@ def create_app():
         # Test TradJini authentication in background (non-blocking)
         import threading
         def verify_totp_async():
-            try:
-                import requests
-                import socket
+            with app.app_context():
+                try:
+                    import requests
+                    import socket
             
-                # Monkey patch DNS resolution for api.tradejini.com
-                original_getaddrinfo = socket.getaddrinfo
-                def custom_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-                    if host == 'api.tradejini.com':
-                        return original_getaddrinfo('13.127.185.58', port, family, type, proto, flags)
-                    return original_getaddrinfo(host, port, family, type, proto, flags)
-                socket.getaddrinfo = custom_getaddrinfo
-                
-                url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
-                headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}"}
-                data = {
-                    "password": TRADEJINI_CONFIG['password'],
-                    "twoFa": form.totp_secret.data,
-                    "twoFaTyp": "totp"
-                }
-                
-                response = requests.post(url, headers=headers, data=data, timeout=3, verify=False)
-                
-                # Restore original DNS resolution
-                socket.getaddrinfo = original_getaddrinfo
-                
-                if response.status_code == 200:
-                    resp_data = response.json()
-                    if 'access_token' in resp_data:
-                        access_token = resp_data['access_token']
-                        
-                        # Store real access token in database
-                        token_credential = UserCredential.query.filter_by(
-                            user_id=admin_user.id,
-                            credential_name='ACCESS_TOKEN'
-                        ).first()
-                        
-                        if token_credential:
-                            token_credential.credential_value = access_token
-                        else:
-                            token_credential = UserCredential(
+                    # Monkey patch DNS resolution for api.tradejini.com
+                    original_getaddrinfo = socket.getaddrinfo
+                    def custom_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+                        if host == 'api.tradejini.com':
+                            return original_getaddrinfo('13.127.185.58', port, family, type, proto, flags)
+                        return original_getaddrinfo(host, port, family, type, proto, flags)
+                    socket.getaddrinfo = custom_getaddrinfo
+                    
+                    url = "https://api.tradejini.com/v2/api-gw/oauth/individual-token-v2"
+                    headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}"}
+                    data = {
+                        "password": TRADEJINI_CONFIG['password'],
+                        "twoFa": form.totp_secret.data,
+                        "twoFaTyp": "totp"
+                    }
+                    
+                    response = requests.post(url, headers=headers, data=data, timeout=3, verify=False)
+                    
+                    # Restore original DNS resolution
+                    socket.getaddrinfo = original_getaddrinfo
+                    
+                    if response.status_code == 200:
+                        resp_data = response.json()
+                        if 'access_token' in resp_data:
+                            access_token = resp_data['access_token']
+                            
+                            # Store real access token in database
+                            token_credential = UserCredential.query.filter_by(
                                 user_id=admin_user.id,
-                                credential_name='ACCESS_TOKEN',
-                                credential_value=access_token
-                            )
-                            db.session.add(token_credential)
-                        
-                        db.session.commit()
-                        print(f'TOTP verified! Access token stored: {access_token[:10]}****')
+                                credential_name='ACCESS_TOKEN'
+                            ).first()
+                            
+                            if token_credential:
+                                token_credential.credential_value = access_token
+                            else:
+                                token_credential = UserCredential(
+                                    user_id=admin_user.id,
+                                    credential_name='ACCESS_TOKEN',
+                                    credential_value=access_token
+                                )
+                                db.session.add(token_credential)
+                            
+                            db.session.commit()
+                            print(f'TOTP verified! Access token stored: {access_token[:10]}****')
+                        else:
+                            print('TOTP authentication failed - no access token received')
                     else:
-                        print('TOTP authentication failed - no access token received')
-                else:
-                    print(f'TOTP authentication failed - status {response.status_code}')
-            except Exception as e:
-                print(f'Background TOTP verification failed: {str(e)}')
+                        print(f'TOTP authentication failed - status {response.status_code}')
+                except Exception as e:
+                    print(f'Background TOTP verification failed: {str(e)}')
         
         # Start background verification
         thread = threading.Thread(target=verify_totp_async, daemon=True)
@@ -715,6 +716,7 @@ def create_app():
 
 # Entry point for both local and production
 if __name__ == '__main__':
+    import os
     app, socketio = create_app()
     # Check if running in production
     if os.getenv('FLASK_ENV') == 'production':
