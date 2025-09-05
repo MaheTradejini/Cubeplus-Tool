@@ -41,11 +41,14 @@ def create_app():
   
   # Check for valid access token on app start
   def check_access_token():
-      token = get_current_access_token()
-      if token:
-          print(f"Valid access token found: {token[:10]}****")
-      else:
-          print("No valid access token found, need TOTP to generate new one")
+      try:
+          token = get_current_access_token()
+          if token:
+              print(f"Valid access token found: {token[:10]}****")
+          else:
+              print("No valid access token found, need TOTP to generate new one")
+      except Exception as e:
+          print(f"Error checking access token: {e}")
   
   # Will check token after db init
   
@@ -135,7 +138,10 @@ def create_app():
         db.session.commit()
     
     # Check for valid access token after db is ready
-    check_access_token()
+    try:
+        check_access_token()
+    except Exception as e:
+        print(f"Warning: Could not check access token: {e}")
 
 
   def login_required(f):

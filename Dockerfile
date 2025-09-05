@@ -23,5 +23,8 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
+# Make startup script executable
+RUN chmod +x start.sh
+
 # Start application
-CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 wsgi:application
+CMD ["./start.sh"]
