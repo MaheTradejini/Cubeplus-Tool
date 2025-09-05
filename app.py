@@ -2,7 +2,7 @@ from functools import wraps
 from flask import Flask, flash, redirect, render_template, url_for, session, request, jsonify
 from flask_socketio import SocketIO
 from forms import LoginForm
-from admin_forms import CreateUserForm, EditUserForm, GlobalTOTPForm, DirectTokenForm
+from admin_forms import CreateUserForm, EditUserForm, DirectTokenForm
 from models import db, User, Transaction, UserCredential, ShortPosition, ClosedPosition
 from flask_bcrypt import Bcrypt
 from tradejini_client import TradejiniClient
@@ -107,10 +107,11 @@ def create_app():
   # Initialize live price streamer
   price_streamer = LivePriceStreamer(socketio)
   
-  # Add route to manually start streaming (real TradJini API)
+  # Add route to manually start streaming (try all methods)
   @app.route('/start-streaming', methods=['POST'])
   def start_streaming():
       try:
+          # Try all available methods for live prices
           if price_streamer.start_live_stream():
               return {'status': 'success', 'message': 'Live streaming started'}
           else:
@@ -603,53 +604,7 @@ def create_app():
     
     return render_template("admin_edit_user.html", form=form, user=user)
 
-  @app.route("/admin/global-totp", methods=['GET', 'POST'])
-  @admin_required
-  def admin_global_totp():
-    form = GlobalTOTPForm()
-    
-    if form.validate_on_submit():
-        # Generate access token directly from TOTP (don't store TOTP)
-        admin_user = User.query.filter_by(is_admin=True).first()
-        totp_value = form.totp_secret.data
-        
-        flash(f'Generating access token with TOTP {totp_value}...', 'info')
-        
-        # Generate mock access token for production (Render has network restrictions)
-        import hashlib
-        import time
-        from datetime import datetime, timedelta
-        
-        print(f"Generating mock access token with TOTP: {totp_value}")
-        
-        # Create a realistic mock access token based on TOTP and timestamp
-        token_seed = f"{TRADEJINI_CONFIG['apikey']}{totp_value}{int(time.time())}"
-        mock_token = hashlib.sha256(token_seed.encode()).hexdigest()[:32]
-        
-        # Store access token with timestamp for 24hr validity
-        token_credential = UserCredential.query.filter_by(
-            user_id=admin_user.id,
-            credential_name='ACCESS_TOKEN'
-        ).first()
-        
-        if token_credential:
-            token_credential.credential_value = mock_token
-            token_credential.updated_at = datetime.utcnow()
-        else:
-            token_credential = UserCredential(
-                user_id=admin_user.id,
-                credential_name='ACCESS_TOKEN',
-                credential_value=mock_token
-            )
-            db.session.add(token_credential)
-        
-        db.session.commit()
-        flash(f'Access token generated successfully! Valid for 24 hours. Token: {mock_token[:10]}****', 'success')
-        print(f'Mock access token stored: {mock_token[:10]}****')
-        
-        return redirect(url_for('admin_dashboard'))
-    
-    return render_template("admin_global_totp.html", form=form)
+
 
   @app.route("/admin/direct-token", methods=['GET', 'POST'])
   @admin_required

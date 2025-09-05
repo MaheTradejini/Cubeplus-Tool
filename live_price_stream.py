@@ -181,6 +181,72 @@ class LivePriceStreamer:
             'price_updates': price_update_count
         }
     
+    def start_http_polling(self):
+        """Start HTTP polling for real TradJini prices"""
+        import threading
+        import time
+        import requests
+        
+        def poll_prices():
+            """Poll TradJini HTTP API for live prices"""
+            print("Starting HTTP polling for real TradJini prices")
+            self.is_connected = True
+            
+            while self.is_connected:
+                try:
+                    # Get stored access token
+                    token = self.get_access_token()
+                    if not token:
+                        print("No access token available for HTTP polling")
+                        break
+                    
+                    # Poll each stock price via HTTP API
+                    for symbol, token_id in STOCK_TOKENS.items():
+                        try:
+                            # Use TradJini HTTP API for live quotes
+                            url = "https://api.tradejini.com/v2/api-gw/market-data/quote"
+                            headers = {
+                                "Authorization": f"Bearer {token}",
+                                "Content-Type": "application/json"
+                            }
+                            data = {
+                                "symbol": token_id,
+                                "exchange": "NSE"
+                            }
+                            
+                            response = requests.post(url, headers=headers, json=data, timeout=5)
+                            
+                            if response.status_code == 200:
+                                quote_data = response.json()
+                                if 'ltp' in quote_data:
+                                    price = float(quote_data['ltp'])
+                                    live_prices[symbol] = price
+                                    
+                                    # Emit price update via WebSocket
+                                    self.socketio.emit('price_update', {
+                                        'symbol': symbol,
+                                        'price': price
+                                    })
+                                    
+                                    print(f"HTTP Poll: {symbol} = ₹{price}")
+                            
+                        except Exception as e:
+                            print(f"Error polling {symbol}: {e}")
+                            continue
+                    
+                    # Wait 3 seconds before next poll
+                    time.sleep(3)
+                    
+                except Exception as e:
+                    print(f"HTTP polling error: {e}")
+                    time.sleep(5)
+        
+        # Start polling in background thread
+        poll_thread = threading.Thread(target=poll_prices, daemon=True)
+        poll_thread.start()
+        
+        return True
+    
     def stop_stream(self):
         """Stop the live stream"""
         if self.nx_stream:
