@@ -628,8 +628,10 @@ def create_app():
         
         # Test TradJini authentication in background (non-blocking)
         import threading
-        def verify_totp_async():
-            print(f"Background TOTP verification started for: {form.totp_secret.data}")
+        totp_value = form.totp_secret.data  # Capture TOTP value before thread
+        
+        def verify_totp_async(totp_code):
+            print(f"Background TOTP verification started for: {totp_code}")
             with app.app_context():
                 try:
                     import requests
@@ -647,11 +649,11 @@ def create_app():
                     headers = {"Authorization": f"Bearer {TRADEJINI_CONFIG['apikey']}"}
                     data = {
                         "password": TRADEJINI_CONFIG['password'],
-                        "twoFa": form.totp_secret.data,
+                        "twoFa": totp_code,
                         "twoFaTyp": "totp"
                     }
                     
-                    print(f"Making API call to TradJini with TOTP: {form.totp_secret.data}")
+                    print(f"Making API call to TradJini with TOTP: {totp_code}")
                     response = requests.post(url, headers=headers, data=data, timeout=3, verify=False)
                     print(f"API Response Status: {response.status_code}")
                     
@@ -688,8 +690,8 @@ def create_app():
                 except Exception as e:
                     print(f'Background TOTP verification failed: {str(e)}')
         
-        # Start background verification
-        thread = threading.Thread(target=verify_totp_async, daemon=True)
+        # Start background verification with TOTP value
+        thread = threading.Thread(target=verify_totp_async, args=(totp_value,), daemon=True)
         thread.start()
         
         return redirect(url_for('admin_dashboard'))
