@@ -693,6 +693,8 @@ def create_app():
 # Entry point for both local and production
 if __name__ == '__main__':
     import os
+    print("Creating Flask app...")
     app, socketio = create_app()
     port = int(os.getenv('PORT', 8000))
-    socketio.run(app, debug=False, host='0.0.0.0', port=port)
+    print(f"Starting app on port {port}")
+    app.run(debug=False, host='0.0.0.0', port=port)
