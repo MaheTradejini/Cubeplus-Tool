@@ -1,16 +1,12 @@
-#!/usr/bin/env python3
-"""
-WSGI entry point for production deployment
-"""
-from app import create_app
 import os
+from app import create_app
 
-# Create Flask app and SocketIO instance
+# Create Flask app instance
 app, socketio = create_app()
 
-# For production with gunicorn (sync worker)
-application = app  # Use Flask app directly for sync worker
+# For gunicorn
+application = app
 
 if __name__ == "__main__":
-    # For development
-    socketio.run(app, debug=False, host='0.0.0.0', port=8000)
+    port = int(os.getenv('PORT', 8000))
+    socketio.run(app, debug=False, host='0.0.0.0', port=port)

@@ -24,4 +24,4 @@ USER appuser
 EXPOSE 8000
 
 # Start application
-CMD ["gunicorn", "--worker-class", "sync", "--workers", "1", "--threads", "2", "--bind", "0.0.0.0:8000", "wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "--timeout", "120", "wsgi:application"]

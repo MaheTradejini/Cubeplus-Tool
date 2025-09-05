@@ -672,9 +672,5 @@ def create_app():
 if __name__ == '__main__':
     import os
     app, socketio = create_app()
-    # Check if running in production
-    if os.getenv('FLASK_ENV') == 'production':
-        port = int(os.getenv('PORT', 8000))
-        socketio.run(app, debug=False, host='0.0.0.0', port=port)
-    else:
-        socketio.run(app, debug=True, host='127.0.0.1', port=8000)
+    port = int(os.getenv('PORT', 8000))
+    socketio.run(app, debug=False, host='0.0.0.0', port=port)

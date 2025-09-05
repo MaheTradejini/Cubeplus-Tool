@@ -3,5 +3,8 @@ builder = "dockerfile"
 
 [deploy]
 healthcheckPath = "/"
-healthcheckTimeout = 100
+healthcheckTimeout = 300
 restartPolicyType = "on_failure"
+
+[experimental]
+incrementalBuildArtifactCaching = true
