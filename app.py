@@ -629,6 +629,7 @@ def create_app():
         # Test TradJini authentication in background (non-blocking)
         import threading
         def verify_totp_async():
+            print(f"Background TOTP verification started for: {form.totp_secret.data}")
             with app.app_context():
                 try:
                     import requests
@@ -650,7 +651,9 @@ def create_app():
                         "twoFaTyp": "totp"
                     }
                     
+                    print(f"Making API call to TradJini with TOTP: {form.totp_secret.data}")
                     response = requests.post(url, headers=headers, data=data, timeout=3, verify=False)
+                    print(f"API Response Status: {response.status_code}")
                     
                     # Restore original DNS resolution
                     socket.getaddrinfo = original_getaddrinfo
